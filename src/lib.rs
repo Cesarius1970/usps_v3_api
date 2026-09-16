@@ -8,48 +8,71 @@
 
 //! # usps_v3_api
 //!
-//! `usps_v3_api` es una biblioteca idiomática y asíncrona para interactuar
-//! con la API REST v3 de USPS (United States Postal Service).
+//! SDK en Rust idiomático, fuertemente tipado, asíncrono y listo para producción
+//! para interactuar con el ecosistema de APIs REST v3 del Servicio Postal de los
+//! Estados Unidos (USPS - United States Postal Service).
 //!
-//! ## Estructura del proyecto
+//! ## Características Principales
 //!
-//! Esta biblioteca sigue las directrices oficiales del equipo de desarrollo de Rust,
-//! los lineamientos de Karpathy (simplicidad, cambios quirúrgicos, pensar antes de codificar)
-//! y las mejores prácticas de Apollo GraphQL para Rust.
+//! - **Arquitectura Asíncrona:** Construido sobre [`tokio`] y [`reqwest`], diseñado para alta concurrencia.
+//! - **Gestión Inteligente de Autenticación OAuth 2.0:** Manejo automático del ciclo de vida del token
+//!   Bearer (`POST /oauth2/v3/token`), con almacenamiento seguro en memoria mediante [`tokio::sync::RwLock`],
+//!   renovación transparente con margen de expiración y patrón double-checked lock.
+//! - **Seguridad en Producción:** Protección de credenciales confidenciales (`client_secret`) contra fugas
+//!   accidentales en logs de depuración (`[REDACTED]`).
+//! - **Servicio de Direcciones (`Addresses v3`):** Estandarización de direcciones, validación de entrega DPV,
+//!   búsqueda de códigos postales (ZIP Lookup) y resolución de ciudad/estado.
+//! - **Servicio de Seguimiento (`Tracking v3`):** Consulta de paquetes en tránsito, detalle de eventos históricos,
+//!   estados y fechas estimadas de entrega.
+//! - **Manejo Exhaustivo de Errores:** Jerarquía fuertemente tipada con [`UspsError`] y deserialización
+//!   de errores estructurados devueltos por la pasarela de USPS.
+//!
+//! ## Ejemplo de Uso Rápido
+//!
+//! ```no_run
+//! use usps_v3_api::{
+//!     UspsClient, UspsEnvironment,
+//!     AddressStandardizationRequest, TrackingExpand,
+//! };
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // 1. Inicializar el cliente SDK
+//!     let client = UspsClient::builder()
+//!         .credentials("TU_CLIENT_ID", "TU_CLIENT_SECRET")
+//!         .environment(UspsEnvironment::Sandbox)
+//!         .build()?;
+//!
+//!     // 2. Estandarizar una dirección postal
+//!     let address_req = AddressStandardizationRequest::new("475 L'Enfant Plaza SW")
+//!         .city_state("Washington", "DC")
+//!         .zip_code("20260");
+//!
+//!     let address_info = client.addresses().standardize(&address_req).await?;
+//!     println!("Dirección estandarizada: {:?}", address_info.address);
+//!
+//!     // 3. Rastrear un paquete
+//!     let tracking = client.tracking().track("9400100000000000000000").await?;
+//!     println!("Estado del paquete: {:?}", tracking.status);
+//!
+//!     Ok(())
+//! }
+//! ```
 
-/// Suma dos enteros de 64 bits sin signo (`u64`).
-///
-/// Función utilitaria base y de prueba para verificar la integridad del compilador y el crate.
-///
-/// # Parámetros
-///
-/// * `left`: Primer operando de tipo [`u64`].
-/// * `right`: Segundo operando de tipo [`u64`].
-///
-/// # Retorno
-///
-/// Retorna la suma de `left` y `right`.
-///
-/// # Ejemplos
-///
-/// ```
-/// use usps_v3_api::add;
-///
-/// let total = add(2, 3);
-/// assert_eq!(total, 5);
-/// ```
-#[must_use]
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod addresses;
+pub mod auth;
+pub mod client;
+pub mod config;
+pub mod error;
+pub mod tracking;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn add_should_return_sum_of_two_numbers() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// Re-exportaciones públicas principales
+pub use addresses::{
+    AddressResponse, AddressStandardizationRequest, AddressesService, CityStateResponse,
+    StandardizedAddress, ZipCodeLookupRequest,
+};
+pub use auth::{OAuthTokenResponse, TokenManager};
+pub use client::{UspsClient, UspsClientBuilder};
+pub use config::{USPS_CAT_BASE_URL, USPS_PROD_BASE_URL, UspsConfig, UspsEnvironment};
+pub use error::{ApiErrorDetail, Result, UspsApiErrorResponse, UspsError};
+pub use tracking::{TrackingEvent, TrackingExpand, TrackingResponse, TrackingService};

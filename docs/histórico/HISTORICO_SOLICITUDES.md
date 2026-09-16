@@ -85,3 +85,48 @@ Modifica Cargo.toml y añade descripciones y campos obligatorios. Crea la docume
    - Ejecución exitosa de `cargo test` (unit tests + doctests pasando con 0 errores).
    - Ejecución de `cargo clippy -- -D warnings` con 0 advertencias.
    - Generación del commit inicial en Git cumpliendo la regla establecida.
+
+---
+
+## Interacción #5
+
+### Solicitud del Usuario
+```text
+Inicializar y desarrollar una librería cliente SDK en Rust fuertemente tipada y lista para producción para el ecosistema de APIs REST USPS v3.
+```
+
+### Clarificación y Selección de Alcance
+- Se consultó al usuario sobre la priorización de servicios para la primera fase.
+- El usuario seleccionó la opción recomendada:
+  `Fase 1: Arquitectura base (Config, OAuth2 auto-refresh, UspsClient) + Addresses v3 y Tracking v3 completos.`
+
+### Respuesta del Agente
+1. **Configuración de Dependencias de Producción (`Cargo.toml`):**
+   - Incorporación de dependencias: `reqwest` (con TLS multiplataforma rustls y json), `tokio`, `serde`, `serde_json`, `thiserror`, `tracing` y `chrono`.
+2. **Jerarquía Tipada de Errores (`src/error.rs`):**
+   - Definición de `UspsError` utilizando `thiserror` para modelar fallas de red, serialización, autenticación, entradas inválidas y errores HTTP devueltos por USPS.
+   - Implementación de `UspsApiErrorResponse` y `ApiErrorDetail` con análisis resiliente y fallback en `UspsError::from_response`.
+3. **Gestión Segura de Configuración y Ambientes (`src/config.rs`):**
+   - Modelado de `UspsEnvironment` (`Sandbox` - `https://api-cat.usps.com`, `Production` - `https://api.usps.com`, `Custom`).
+   - Implementación de `UspsConfig` con constructor validado y sanitización de seguridad en `fmt::Debug` (`[REDACTED]` para `client_secret`).
+4. **Autenticación OAuth 2.0 con Auto-Refresh Concurrente (`src/auth.rs`):**
+   - Implementación de `TokenManager` con `tokio::sync::RwLock` y patrón *double-checked locking*.
+   - Renovación automática y transparente del token con margen de anticipación de 60 segundos (`EXPIRATION_BUFFER_SECS`).
+5. **Cliente Central y Patrón Builder (`src/client.rs`):**
+   - Implementación de `UspsClient` con puntero interno atómico `Arc` para clonado de costo cero.
+   - `UspsClientBuilder` para inicialización ergonómica y validada.
+   - Métodos autenticados genéricos `get_with_query` y `post_json`.
+6. **Módulo de Direcciones v3 (`src/addresses.rs`):**
+   - Modelos fuertemente tipados: `AddressStandardizationRequest`, `StandardizedAddress`, `AddressResponse`, `ZipCodeLookupRequest`, `CityStateResponse`.
+   - Métodos de servicio: `standardize`, `lookup_zip_code`, `lookup_city_state`.
+7. **Módulo de Seguimiento v3 (`src/tracking.rs`):**
+   - Modelos fuertemente tipados: `TrackingResponse`, `TrackingEvent`, `TrackingExpand`.
+   - Métodos de servicio: `track`, `track_with_expand`.
+8. **Exposición Pública y Documentación Viva:**
+   - Actualización de `src/lib.rs` con re-exportaciones de alto nivel y doctests interactivos.
+   - Actualización exhaustiva del manual técnico en `docs/MANUAL_TECNICO.md`.
+9. **Verificación de Calidad y Cierre:**
+   - Ejecución de `cargo fmt --check`: Cumplimiento total de formato.
+   - Ejecución de `cargo test`: 13 pruebas unitarias y 1 doctest aprobados (0 fallos).
+   - Ejecución de `cargo clippy --all-targets --all-features -- -D warnings`: 0 advertencias.
+   - Generación de commit bajo estándar Conventional Commits.

@@ -3,7 +3,7 @@
 ## 1. Identificación y Copyright
 
 - **Nombre del Proyecto:** `usps_v3_api`
-- **Descripción:** Cliente asíncrono e idiomático para la API REST v3 de USPS (United States Postal Service) implementado en Rust.
+- **Descripción:** Cliente SDK asíncrono, fuertemente tipado e idiomático para la API REST v3 de USPS (United States Postal Service) implementado en Rust.
 - **Autor y Titular de Derechos de Autor:** César A Vergara Buenaventura (`cesarvergarab@gmail.com`).
 - **Copyright:** Copyright (c) 2026 César A Vergara Buenaventura. Todos los derechos reservados.
 - **Licenciamiento:** Doble licencia estándar del ecosistema oficial de Rust:
@@ -58,20 +58,20 @@ Tipos permitidos:
 
 1. **Directrices de Karpathy (Karpathy Guidelines):**
    - **Pensar antes de codificar:** Declarar supuestos explícitos, aclarar ambigüedades, plantear compensaciones de diseño antes de ejecutar.
-   - **Simplicidad primero:** Código mínimo necesario que resuelva el problema sin abstracciones prematuras ni características especulativas.
+   - **Simplicidad primero:** Código mínimo necesario que resuelva el problema sin abstracciones prematuras ni sobreingeniería.
    - **Cambios quirúrgicos:** Modificar estrictamente lo necesario, conservando estilo existente y sin tocar código ajeno que funcione.
    - **Ejecución orientada a objetivos:** Metas con criterios de verificación medibles (`cargo test`, `cargo clippy`).
 
 2. **Mejores Prácticas de Rust (Apollo Guidelines):**
    - Priorizar referencias (`&str`, `&[T]`) sobre clones y traspasos de propiedad innecesarios.
-   - Tipos de error claros con `thiserror` para la librería.
+   - Jerarquía de errores fuertemente tipada con `thiserror`.
    - Prohibido el uso de `unwrap()` o `expect()` fuera del alcance de tests (`#[cfg(test)]`).
-   - Mantenimiento con cero advertencias: `cargo clippy --all-targets -- -D warnings`.
+   - Mantenimiento con cero advertencias: `cargo clippy --all-targets --all-features -- -D warnings`.
 
 3. **Patrones Asíncronos con Tokio:**
    - Estricta no-bloqueabilidad del hilo asíncrono (uso de `spawn_blocking` para I/O bloqueante o CPU intensivo).
    - No retener cerrojos sincrónicos (`std::sync::Mutex`) a través de llamadas `.await`.
-   - Concurrencia controlada con semáforos, canales acotados y orquestación con `JoinSet` / `select!`.
+   - Concurrencia controlada mediante `tokio::sync::RwLock` con patrón *double-checked locking* para renovación segura de tokens.
 
 ---
 
@@ -86,60 +86,101 @@ usps_v3_api/
 ├── NOTICE                      # Atribución y copyright oficial
 ├── README.md                   # Resumen del proyecto y guía de inicio
 ├── docs/
-│   ├── MANUAL_TECNICO.md       # Este documento técnico vivo
+│   ├── MANUAL_TECNICO.md       # Este manual técnico vivo
 │   └── histórico/
 │       └── HISTORICO_SOLICITUDES.md # Bitácora cronológica de interacciones
 └── src/
-    └── lib.rs                  # Raíz de la biblioteca y utilidades base
+    ├── addresses.rs            # Módulo de Direcciones v3 (Addresses v3)
+    ├── auth.rs                 # Gestor OAuth 2.0 con auto-refresh y RwLock
+    ├── client.rs               # Cliente central UspsClient y UspsClientBuilder
+    ├── config.rs               # Configuración, entornos y saneamiento de secretos
+    ├── error.rs                # Jerarquía de errores UspsError y deserialización API
+    ├── lib.rs                  # Raíz de la biblioteca y re-exportaciones públicas
+    └── tracking.rs             # Módulo de Seguimiento de Envíos v3 (Tracking v3)
 ```
-
-### 3.2. Metadatos de `Cargo.toml`
-El manifiesto del crate cumple rigurosamente con los campos exigidos y recomendados por el equipo oficial de desarrollo de Rust:
-
-- `name`: Identificador único en crates.io (`usps_v3_api`).
-- `version`: `0.1.0` siguiendo SemVer.
-- `edition`: `"2024"`.
-- `rust-version`: `"1.85.0"`.
-- `authors`: Atribución a César A Vergara Buenaventura.
-- `license`: Expresión SPDX válida `"MIT OR Apache-2.0"`.
-- `description`, `readme`, `repository`, `homepage`, `documentation`, `keywords`, `categories`.
-
-### 3.3. Detalle de Módulos y Algoritmos Actuales
-
-#### Módulo Raíz: `src/lib.rs`
-- **Encabezado legal:** Incluye aviso de copyright y compatibilidad de licencias Apache 2.0 y MIT.
-- **Documentación a nivel de crate (`//!`):** Proporciona contexto y marco metodológico a `rustdoc`.
-- **Función / Algoritmo `add(left: u64, right: u64) -> u64`:**
-  - **Propósito:** Función aritmética básica de validación de compilación, pipeline y sanidad de tipos de 64 bits.
-  - **Anotación `#[must_use]`:** Garantiza advertencias del compilador si el resultado no es consumido.
-  - **Doctest:** Cuenta con prueba funcional integrada en la documentación para verificar ejemplos vivos con `cargo test`.
-  - **Pruebas unitarias:** Módulo `tests` con verificación de casos de prueba (`add_should_return_sum_of_two_numbers`).
 
 ---
 
-## 4. Guía de Compilación, Pruebas y Calidad
+## 4. Detalle de Módulos, Patrones y Algoritmos
 
-Para compilar el proyecto y garantizar que cumple con todos los estándares:
+### 4.1. Módulo de Errores (`src/error.rs`)
+- **Propósito:** Proporcionar una jerarquía tipada que permita al consumidor inspeccionar la causa exacta de una falla sin conversiones de cadenas opacas.
+- **Tipos clave:**
+  - `UspsError`: Enum que agrupa errores de red (`reqwest::Error`), serialización (`serde_json::Error`), autenticación OAuth 2.0 (`UspsError::Auth`), datos de entrada inválidos (`UspsError::InvalidInput`) y errores de API (`UspsError::Api`).
+  - `UspsApiErrorResponse`: Modela la carga JSON de respuesta de error oficial de USPS (códigos, descripciones y vectores de `ApiErrorDetail`).
+- **Algoritmo `UspsError::from_response(status, body)`:**
+  Evalúa el cuerpo HTTP retornado; si es un JSON estructurado, extrae los detalles técnicos y advertencias de USPS; si no lo es (ej. error 502 de gateway intermedio), realiza fallback seguro sin entrar en pánico.
+
+### 4.2. Módulo de Configuración (`src/config.rs`)
+- **Propósito:** Gestionar credenciales, timeouts y selección de endpoints según el ambiente.
+- **Ambientes soportados (`UspsEnvironment`):**
+  - `Sandbox`: `https://api-cat.usps.com` (Entorno oficial de pruebas CAT de USPS).
+  - `Production`: `https://api.usps.com` (Entorno de producción en vivo).
+  - `Custom(String)`: Para proxies empresariales, balanceadores o servidores mock locales.
+- **Patrón de Seguridad (Sanitización en Debug):**
+  Se implementa `std::fmt::Debug` manualmente para `UspsConfig`, sustituyendo el campo sensible `client_secret` por `"[REDACTED]"`. Esto previene fugas accidentales de secretos en sistemas de telemetría y logs.
+
+### 4.3. Módulo de Autenticación (`src/auth.rs`)
+- **Propósito:** Automatizar la obtención y el refresco transparente del Bearer Token OAuth 2.0 (`POST /oauth2/v3/token`).
+- **Algoritmo de Concurrencia Segura:**
+  1. Adquiere un bloqueo de lectura (`read().await`) sobre `cached_token` (`tokio::sync::RwLock`). Si el token existe y aún no ha alcanzado su margen de expiración (`is_valid()`), se retorna de inmediato sin bloquear a otras tareas concurrentes.
+  2. Si el token está ausente o próximo a expirar (margen `EXPIRATION_BUFFER_SECS = 60s`), adquiere el bloqueo de escritura (`write().await`).
+  3. Ejecuta el patrón *double-checked locking*: verifica si otra tarea concurrente ya renovó el token mientras se esperaba el bloqueo.
+  4. Si continúa inválido, emite la llamada HTTP `POST /oauth2/v3/token` con `grant_type=client_credentials`, almacena el nuevo token con su timestamp de caducidad calculada y lo retorna.
+
+### 4.4. Módulo de Cliente Central (`src/client.rs`)
+- **Propósito:** Punto único de orquestación, conexión HTTP y despacho de peticiones.
+- **Diseño con Puntero Atómico (`Arc`):**
+  `UspsClient` encapsula un `Arc<UspsClientInner>`, permitiendo su clonación a costo insignificante (incremento de puntero atómico) para distribuirlo entre múltiples hilos o tareas concurrentes de Tokio.
+- **Patrón Builder (`UspsClientBuilder`):**
+  Permite configuración fluida de credenciales, timeout y entorno con validación previa de datos obligatorios.
+- **Métodos Despachadores Genéricos:**
+  - `get_with_query<Q, T>(&self, endpoint, query)`: Inyecta automáticamente la cabecera `Authorization: Bearer <token>`, aplica serialización de query parameters y deserializa el tipo `T`.
+  - `post_json<B, T>(&self, endpoint, body)`: Despacha cuerpos JSON autenticados.
+
+### 4.5. Módulo de Direcciones (`src/addresses.rs`)
+- **Propósito:** Normalizar y validar direcciones postales en Estados Unidos según la base de datos de USPS.
+- **Servicios:**
+  - `standardize(&AddressStandardizationRequest) -> Result<AddressResponse>`: Consulta `GET /addresses/v3/address`. Retorna la dirección en formato estándar de USPS, códigos ZIP+4, confirmación DPV (`DPVConfirmation`), indicación de entrega comercial (`DPVCMRA`), indicador de negocio y vacancia.
+  - `lookup_zip_code(&ZipCodeLookupRequest) -> Result<AddressResponse>`: Consulta `GET /addresses/v3/zipcode` para resolver el código postal correspondiente a una dirección.
+  - `lookup_city_state(zip_code) -> Result<CityStateResponse>`: Consulta `GET /addresses/v3/city-state` validando previamente que el código postal conste de 5 dígitos numéricos.
+
+### 4.6. Módulo de Seguimiento (`src/tracking.rs`)
+- **Propósito:** Seguimiento de envíos postales en tiempo real.
+- **Servicios:**
+  - `track(tracking_number) -> Result<TrackingResponse>`: Consulta detallada de la línea de tiempo completa del paquete.
+  - `track_with_expand(tracking_number, TrackingExpand) -> Result<TrackingResponse>`: Permite seleccionar entre historial detallado (`TrackingExpand::Detail`) o resumen del estado actual (`TrackingExpand::Summary`).
+  - Validación de caracteres antes de invocar la red para evitar inyecciones o rutas URL malformadas.
+
+---
+
+## 5. Guía de Compilación, Pruebas y Calidad
+
+El proyecto se valida de extremo a extremo mediante el conjunto de herramientas oficiales de Rust:
 
 ```bash
-# Compilar en modo desarrollo
+# Compilar todo el SDK
 cargo build
 
-# Ejecutar pruebas unitarias y pruebas de documentación
+# Ejecutar las 13 pruebas unitarias y doctests interactivos
 cargo test
 
-# Ejecutar linter estricto de Rust sin advertencias permitidas
+# Verificar cumplimiento de formato oficial con rustfmt
+cargo fmt --check
+
+# Ejecutar el linter estricto de Rust sin advertencias permitidas
 cargo clippy --all-targets --all-features -- -D warnings
 
-# Generar documentación técnica en formato HTML
+# Generar documentación local en HTML
 cargo doc --no-deps --open
 ```
 
 ---
 
-## 5. Mantenimiento y Actualización de este Manual
+## 6. Mantenimiento Continuo
 
-Este documento es un manual técnico vivo. Conforme se incorporen clientes HTTP, autenticación OAuth2 con el portal de USPS Developer v3, endpoints de direcciones, tracking y tarifas, este documento debe actualizarse registrando:
-1. Diagramas de arquitectura y flujo de autenticación/llamadas.
-2. Contratos de tipos y modelos de datos (DTOs).
-3. Manejo de códigos de error HTTP y reintentos.
+Cada vez que se extienda el SDK (por ejemplo, incorporando los módulos de Tarifas Nacionales / Internacionales `prices/v3` o Generación de Etiquetas `labels/v3`):
+1. Añadir los contratos de datos y endpoints en submódulos dedicados.
+2. Escribir pruebas unitarias de serialización/deserialización de respuestas de prueba.
+3. Actualizar la sección 4 de este documento.
+4. Generar el commit correspondiente en Git bajo la convención establecida.
