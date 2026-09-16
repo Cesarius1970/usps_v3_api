@@ -26,6 +26,7 @@ use crate::services::locations::LocationsService;
 use crate::services::manifests::ManifestsService;
 use crate::services::pickup::PickupService;
 use crate::services::prices::PricesService;
+use crate::services::standards::ServiceStandardsService;
 use crate::services::tracking::TrackingService;
 use crate::services::webhooks::WebhooksService;
 
@@ -125,6 +126,12 @@ impl UspsClient {
     #[must_use]
     pub fn webhooks(&self) -> WebhooksService {
         WebhooksService::new(self.clone())
+    }
+
+    /// Retorna el servicio de consulta de estándares de servicio y tiempos de entrega (`Service Standards v3`).
+    #[must_use]
+    pub fn service_standards(&self) -> ServiceStandardsService {
+        ServiceStandardsService::new(self.clone())
     }
 
     /// Retorna el gestor interno de autenticación para consultar o forzar tokens.

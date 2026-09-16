@@ -14,6 +14,7 @@ pub mod locations;
 pub mod manifests;
 pub mod pickup;
 pub mod prices;
+pub mod standards;
 pub mod tracking;
 pub mod webhooks;
 
@@ -37,6 +38,10 @@ pub use pickup::{
 pub use prices::{
     DomesticRateRequest, DomesticRateResponse, InternationalMailClass, InternationalRateRequest,
     InternationalRateResponse, MailClass, PricesService, ProcessingCategory, RateItem,
+};
+pub use standards::{
+    ServiceStandardEstimate, ServiceStandardRequest, ServiceStandardResponse,
+    ServiceStandardsService,
 };
 pub use tracking::{TrackingEvent, TrackingExpand, TrackingResponse, TrackingService};
 pub use webhooks::{

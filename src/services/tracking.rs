@@ -169,6 +169,53 @@ impl TrackingService {
 
         self.client.get_with_query(&endpoint, &query).await
     }
+
+    /// Consulta el estado de múltiples números de seguimiento simultáneamente (hasta 35 paquetes por lote).
+    ///
+    /// Realiza una solicitud `GET /tracking/v3/tracking?trackingNumbers={nums}&expand={expand}`.
+    ///
+    /// # Errores
+    ///
+    /// Retorna [`UspsError::InvalidInput`] si la lista está vacía, excede 35 números o contiene identificadores inválidos.
+    #[instrument(skip(self, tracking_numbers), name = "track_batch")]
+    pub async fn track_batch(
+        &self,
+        tracking_numbers: &[impl AsRef<str>],
+        expand: TrackingExpand,
+    ) -> Result<Vec<TrackingResponse>> {
+        if tracking_numbers.is_empty() {
+            return Err(UspsError::InvalidInput(
+                "Debe indicarse al menos un número de seguimiento para la consulta por lotes"
+                    .to_string(),
+            ));
+        }
+
+        if tracking_numbers.len() > 35 {
+            return Err(UspsError::InvalidInput(
+                "USPS admite un máximo de 35 números de seguimiento por consulta por lotes"
+                    .to_string(),
+            ));
+        }
+
+        let cleaned: Vec<String> = tracking_numbers
+            .iter()
+            .map(|n| n.as_ref().trim().to_string())
+            .collect();
+
+        for n in &cleaned {
+            if n.is_empty() || n.contains(['/', '?', '&', '#', ' ']) {
+                return Err(UspsError::InvalidInput(format!(
+                    "Número de seguimiento inválido: '{n}'"
+                )));
+            }
+        }
+
+        let joined = cleaned.join(",");
+        let endpoint = "/tracking/v3/tracking";
+        let query = [("trackingNumbers", joined), ("expand", expand.to_string())];
+
+        self.client.get_with_query(endpoint, &query).await
+    }
 }
 
 #[cfg(test)]
@@ -214,5 +261,43 @@ mod tests {
     fn tracking_expand_display() {
         assert_eq!(TrackingExpand::Detail.to_string(), "detail");
         assert_eq!(TrackingExpand::Summary.to_string(), "summary");
+    }
+
+    #[tokio::test]
+    async fn track_batch_validation_should_fail_when_empty() {
+        let client = UspsClient::builder()
+            .credentials("test", "secret")
+            .build()
+            .unwrap();
+
+        let empty: [&str; 0] = [];
+        let err = client
+            .tracking()
+            .track_batch(&empty, TrackingExpand::Summary)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, UspsError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn track_batch_validation_should_fail_when_over_35_items() {
+        let client = UspsClient::builder()
+            .credentials("test", "secret")
+            .build()
+            .unwrap();
+
+        let mut nums = Vec::new();
+        for i in 0..36 {
+            nums.push(format!("94001000000000000000{i:02}"));
+        }
+
+        let err = client
+            .tracking()
+            .track_batch(&nums, TrackingExpand::Summary)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, UspsError::InvalidInput(_)));
     }
 }

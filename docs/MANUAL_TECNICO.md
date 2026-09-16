@@ -96,6 +96,11 @@ usps_v3_api/
 │   ├── MANUAL_TECNICO.md       # Este manual técnico vivo
 │   └── histórico/
 │       └── HISTORICO_SOLICITUDES.md # Bitácora cronológica de interacciones
+├── examples/
+│   ├── quickstart.rs           # Ejemplo rápido: direcciones y tracking
+│   └── shipping_workflow.rs    # Ciclo e-commerce: tarifas, estándares, etiquetas, manifiestos, webhooks
+├── tests/
+│   └── integration_tests.rs    # Suite de pruebas de integración externa y concurrencia
 └── src/
     ├── lib.rs                  # Raíz del crate, re-exportaciones canónicas y doctests
     ├── core/                   # CAPA CENTRAL (Infraestructura y Transporte)
@@ -113,6 +118,7 @@ usps_v3_api/
         ├── manifests.rs        # Módulo de Manifiestos SCAN Form v3 (Manifests v3)
         ├── pickup.rs           # Módulo de Recolección de Paquetes v3 (Pickup v3)
         ├── prices.rs           # Módulo de Precios y Tarifas Nacionales/Internacionales (Prices v3)
+        ├── standards.rs        # Módulo de Estándares de Servicio y Tránsito v3 (Service Standards v3)
         ├── tracking.rs         # Módulo de Seguimiento de Envíos v3 (Tracking v3)
         └── webhooks.rs         # Módulo de Suscripciones y Webhooks v3 (Subscriptions v3)
 ```
@@ -166,16 +172,16 @@ usps_v3_api/
   - `client.locations()` -> `LocationsService`
   - `client.manifests()` -> `ManifestsService`
   - `client.pickup()` -> `PickupService`
+  - `client.service_standards()` -> `ServiceStandardsService`
   - `client.webhooks()` -> `WebhooksService`
 
 #### 4.1.5. Módulo de Reintentos y Resiliencia (`src/core/retry.rs`)
 - **Propósito:** Manejo automático y transparente de fallos transitorios de red y límites de velocidad de la API de USPS.
 - **Estructura `RetryPolicy`:**
   - `max_retries`: Número máximo de intentos (por defecto 3).
-  - `initial_backoff`: Demora base inicial (por defecto 200 ms).
-  - `max_backoff`: Límite superior de espera (por defecto 5.000 ms).
-  - `backoff_factor`: Factor multiplicador exponencial (por defecto 2.0).
-  - `jitter`: Variación aleatoria pseudo-determinística para mitigar el problema de *thundering herd* hacia la infraestructura de USPS.
+  - `initial_delay`: Demora base inicial (por defecto 200 ms).
+  - `max_delay`: Límite superior de espera (por defecto 5.000 ms).
+  - `calculate_backoff(attempt)`: Backoff exponencial acotado.
 - **Algoritmo de Detección de Códigos Reintentables:**
   Evalúa el código de estado HTTP y reintenta ante:
   - `429 Too Many Requests`: Respeto a ventanas de límite de cuota o rate limiting.
@@ -194,10 +200,11 @@ usps_v3_api/
   - `lookup_city_state(zip_code) -> Result<CityStateResponse>`: Consulta `GET /addresses/v3/city-state` validando previamente que el código postal conste de 5 dígitos numéricos.
 
 #### 4.2.2. Módulo de Seguimiento (`src/services/tracking.rs`)
-- **Propósito:** Seguimiento de envíos postales en tiempo real.
+- **Propósito:** Seguimiento de envíos postales en tiempo real, de forma individual o en lotes masivos.
 - **Servicios:**
   - `track(tracking_number) -> Result<TrackingResponse>`: Consulta detallada de la línea de tiempo completa del paquete (`TrackingExpand::Detail`).
   - `track_with_expand(tracking_number, TrackingExpand) -> Result<TrackingResponse>`: Permite seleccionar entre historial detallado (`TrackingExpand::Detail`) o resumen del estado actual (`TrackingExpand::Summary`).
+  - `track_batch(tracking_numbers, TrackingExpand) -> Result<Vec<TrackingResponse>>`: Consulta en una única llamada HTTP de hasta 35 números de seguimiento (`GET /tracking/v3/tracking?trackingNumbers=...`), validando límites y formatos.
 
 #### 4.2.3. Módulo de Precios y Tarifas (`src/services/prices.rs`)
 - **Propósito:** Cálculo y cotización de tarifas de franqueo para envíos nacionales e internacionales.
@@ -237,6 +244,11 @@ usps_v3_api/
   - `get_subscription(subscription_id) -> Result<SubscriptionResponse>`: Consulta `GET /subscriptions/v3/subscription/{subscriptionId}`.
   - `delete_subscription(subscription_id) -> Result<DeleteSubscriptionResponse>`: Despacha `DELETE /subscriptions/v3/subscription/{subscriptionId}` utilizando el cliente HTTP centralizado con reintentos.
 
+#### 4.2.9. Módulo de Estándares de Servicio y Tiempos de Tránsito (`src/services/standards.rs`)
+- **Propósito:** Cálculo de compromisos de entrega y fechas estimadas de entrega (Expected Delivery Date - EDD) de USPS.
+- **Servicios:**
+  - `get_estimates(&ServiceStandardRequest) -> Result<ServiceStandardResponse>`: Consulta `GET /service-standards/v3/estimates`. Requiere códigos postales de 5 dígitos de origen y destino, fecha de depósito opcional y filtro por clase postal. Retorna la lista de compromisos (`ServiceStandardEstimate`) con fecha programada, días de tránsito y hora límite de depósito.
+
 ---
 
 ## 5. Guía de Compilación, Pruebas y Calidad
@@ -247,8 +259,8 @@ El proyecto se valida de extremo a extremo mediante el conjunto de herramientas 
 # Compilar todo el SDK
 cargo build
 
-# Ejecutar las 31 pruebas unitarias y doctests interactivos
-cargo test
+# Ejecutar las 38 pruebas (35 unitarias + 3 de integración) y doctests interactivos
+cargo test --all-targets --all-features
 
 # Verificar cumplimiento de formato oficial con rustfmt
 cargo fmt --check
@@ -287,25 +299,21 @@ Cada vez que se extienda el SDK:
 - **Fecha:** 2026-09-15
 - **Git Tag:** `v0.1.0`
 - **Registro en crates.io:** `usps_v3_api = "0.1.0"`
-- **Alcance Completo:**
-  - Capa de infraestructura transversal (`core`): OAuth 2.0 Client Credentials con auto-refresh seguro mediante `RwLock`, `UspsClient`, `UspsConfig` (con sanitización de secretos en logs) y jerarquía `UspsError`.
-  - Capa de servicios (`services`):
-    - `AddressesService` (`addresses/v3`): Estandarización de direcciones, validación DPV, búsqueda de ZIP codes y resolución de ciudad/estado.
-    - `TrackingService` (`tracking/v3`): Rastreo en tiempo real, eventos históricos de escaneo y fechas estimadas de entrega.
-    - `PricesService` (`prices/v3`): Tarifas nacionales base y dimensionales, y tarifas internacionales con validación ISO.
-    - `LabelsService` (`labels/v3`): Emisión de etiquetas oficiales con código de barras (PDF, PNG, TIFF, SVG, Base64) y cancelación de etiquetas.
-    - `PickupService` (`pickup/v3`): Disponibilidad de recolección de cartero, programación a domicilio y cancelación.
-    - `LocationsService` (`locations/v3`): Búsqueda de oficinas postales y buzones por código postal o geocordenadas, horarios y catálogo de servicios.
-  - Batería de 25 pruebas unitarias y doctests interactivos con 100% de aprobación y 0 advertencias de Clippy.
+- **Alcance Inicial:**
+  - Autenticación OAuth 2.0 con auto-refresh en memoria (`RwLock`).
+  - Servicios v3: Direcciones, Tracking individual, Tarifas nacionales e internacionales, Etiquetas postales, Recolección a domicilio y Ubicaciones de oficinas.
+  - Batería de 25 pruebas unitarias.
 
-### Fase Actual (Camino hacia v0.2.0)
-- **Mejoras de Infraestructura y Resiliencia:**
-  - Incorporación de `RetryPolicy` con backoff exponencial y jitter aleatorio configurable en `UspsConfig`.
-  - Soporte transversal de reintentos para peticiones HTTP GET, POST y DELETE en `UspsClient`.
-  - Método unificado `client.delete()` que reutiliza el pool de conexiones y timeouts configurados.
-- **Nuevos Servicios USPS v3:**
-  - `ManifestsService` (`manifests/v3`): Emisión y consulta de formularios SCAN Form (PS Form 5630) con código maestro.
-  - `WebhooksService` (`subscriptions/v3`): Gestión de suscripciones webhook para eventos de rastreo y entrega en tiempo real.
-- **Control de Calidad & CI/CD:**
-  - Automatización con GitHub Actions (`.github/workflows/ci.yml`).
-  - Cobertura incrementada a 31 pruebas unitarias y doctests con 0 errores y 0 advertencias.
+### Versión 0.2.0 (Resiliencia, Estándares de Entrega y Automatización)
+- **Fecha:** 2026-09-15
+- **Git Branch:** `main`
+- **Novedades de la Versión:**
+  - **Nueva Resiliencia:** `RetryPolicy` con backoff exponencial y jitter determinístico ante códigos transitorios HTTP 429, 500, 502, 503 y 504 en `UspsClient`.
+  - **Nuevo Servicio:** `ServiceStandardsService` (`service-standards/v3`) para cálculo de fechas estimadas de entrega (EDD) y tiempos de tránsito origen-destino.
+  - **Nuevo Servicio:** `ManifestsService` (`manifests/v3`) para generación de formularios SCAN Form (PS Form 5630).
+  - **Nuevo Servicio:** `WebhooksService` (`subscriptions/v3`) para suscripción a notificaciones en tiempo real.
+  - **Rastreo por Lotes:** Método `track_batch` en `TrackingService` para hasta 35 envíos simultáneos.
+  - **Suite de Pruebas de Integración:** Archivo `tests/integration_tests.rs` con validación de APIs públicas, concurrencia en Tokio y validaciones preventivas de entrada.
+  - **Ejemplos Prácticos:** Directorio `examples/` con `quickstart.rs` y `shipping_workflow.rs`.
+  - **Pipeline CI/CD:** Flujo de trabajo en `.github/workflows/ci.yml`.
+  - Cobertura expandida a **38 pruebas automáticas y 1 doctest** con 100% de aprobación y 0 advertencias de Clippy.

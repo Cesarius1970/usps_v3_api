@@ -305,3 +305,42 @@ Se continuó con la siguiente fase integral de desarrollo del SDK, incorporando 
    - Incorporación de nuevas pruebas unitarias: suite expandida a 31 pruebas unitarias y 1 doctest, todas superadas con éxito.
    - Verificación estricta de formato (`cargo fmt --check`) y análisis de lints (`cargo clippy --all-targets --all-features -- -D warnings` con 0 advertencias).
    - Generación de commit bajo estándar Conventional Commits (`feat(sdk): add Manifests v3, Subscriptions v3, and RetryPolicy resilience`).
+
+---
+
+## Interacción #11
+
+### Solicitud del Usuario
+```text
+Continuar con las siguientes fases del desarrollo segun el plan
+```
+
+### Respuesta del Agente
+Se ejecutó la siguiente fase del plan de desarrollo, consolidando el soporte para estándares de entrega postal, rastreo masivo por lotes, suite de pruebas de integración externa y recetas prácticas de uso:
+
+1. **Servicio de Estándares de Entrega y Tiempos de Tránsito (`src/services/standards.rs` - `Service Standards v3`):**
+   - Implementación de [`ServiceStandardsService`] para consulta del endpoint `GET /service-standards/v3/estimates`.
+   - Modelado de solicitud [`ServiceStandardRequest`] con validación de códigos postales de 5 dígitos de origen y destino, fecha de depósito y filtro por clase postal (`MailClass`).
+   - Modelado de respuesta [`ServiceStandardResponse`] y estimaciones individuales [`ServiceStandardEstimate`], con fechas programadas (EDD), días de tránsito y horarios de corte de admisión.
+   - Integración fluida accesible desde `client.service_standards()`.
+
+2. **Rastreo Masivo por Lotes (`src/services/tracking.rs` - `Tracking v3`):**
+   - Incorporación del método `TrackingService::track_batch`, permitiendo consultar hasta 35 números de seguimiento en una única solicitud HTTP con parámetros de expansión (`TrackingExpand`).
+   - Validación estricta en el cliente para listas vacías o listas que superen la cuota de 35 envíos por llamada.
+
+3. **Ejemplos Prácticos y Recetas de Uso (`examples/`):**
+   - `examples/quickstart.rs`: Demostración concisa de inicio rápido con estandarización de direcciones, resolución de ciudad/estado y rastreo individual y por lotes.
+   - `examples/shipping_workflow.rs`: Ciclo completo de logística e-commerce (cotización de tarifas, verificación de compromisos de entrega, emisión de etiqueta postal, consolidación en manifiesto SCAN Form y registro de webhook).
+
+4. **Suite de Pruebas de Integración y Concurrencia (`tests/integration_tests.rs`):**
+   - Pruebas desde la perspectiva de un consumidor externo del crate (`usps_v3_api::*`).
+   - Verificación de concurrencia y clonado seguro de [`UspsClient`] a través de múltiples tareas de Tokio.
+   - Validación de configuración personalizada (`RetryPolicy` con delays y jitter, entornos custom).
+   - Pruebas de fallo preventivo en validaciones de entrada previas a despachos de red en todos los servicios.
+
+5. **Actualización de Versión y Métricas de Calidad:**
+   - Incremento de versión en `Cargo.toml` a `0.2.0`.
+   - Banco de pruebas incrementado a **38 pruebas automáticas (35 unitarias + 3 de integración) y 1 doctest**, todas superadas al 100%.
+   - Verificación de formato (`cargo fmt --check`) y análisis de lints estricto (`cargo clippy --all-targets --all-features -- -D warnings` con 0 advertencias).
+   - Actualización del Manual Técnico `docs/MANUAL_TECNICO.md` y bitácora histórica.
+   - Generación de commit bajo estándar Conventional Commits (`feat(sdk): add Service Standards v3, batch tracking, examples, and bump to v0.2.0`).

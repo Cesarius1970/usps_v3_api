@@ -23,10 +23,12 @@
 //!   accidentales en logs de depuración (`[REDACTED]`).
 //! - **Servicio de Direcciones (`Addresses v3`):** Estandarización de direcciones, validación de entrega DPV,
 //!   búsqueda de códigos postales (ZIP Lookup) y resolución de ciudad/estado.
-//! - **Servicio de Seguimiento (`Tracking v3`):** Consulta de paquetes en tránsito, detalle de eventos históricos,
-//!   estados y fechas estimadas de entrega.
+//! - **Servicio de Seguimiento (`Tracking v3`):** Consulta individual y por lotes (hasta 35 paquetes) de envíos en tránsito,
+//!   detalle de eventos históricos, estados y fechas estimadas de entrega.
 //! - **Servicio de Precios y Tarifas (`Prices v3`):** Cotización de tarifas postales nacionales e internacionales
 //!   por peso, dimensiones y clases postales (`Priority Mail`, `USPS Ground Advantage`, `Global Express Guaranteed`, etc.).
+//! - **Servicio de Estándares de Entrega (`Service Standards v3`):** Cálculo de compromisos de entrega, fechas estimadas
+//!   (Expected Delivery Date - EDD) y días de tránsito entre códigos postales origen y destino.
 //! - **Servicio de Etiquetas (`Labels v3`):** Emisión y cancelación de etiquetas postales con código de barras en
 //!   formatos PDF, PNG, TIFF, SVG o Base64 (`POST /labels/v3/label`, `DELETE /labels/v3/label/{id}`).
 //! - **Servicio de Manifiestos (`Manifests v3`):** Consolidación de envíos masivos en un Formulario SCAN Form
@@ -95,7 +97,8 @@ pub use services::{
     LocationSearchResponse, LocationServiceType, LocationsService, MailClass, ManifestsService,
     PackageDescription, PackageLocation, PickupAvailabilityResponse, PickupContactAddress,
     PickupPackageCount, PickupService, PricesService, ProcessingCategory, RateItem,
-    SchedulePickupRequest, SchedulePickupResponse, StandardizedAddress, SubscriptionEventType,
+    SchedulePickupRequest, SchedulePickupResponse, ServiceStandardEstimate, ServiceStandardRequest,
+    ServiceStandardResponse, ServiceStandardsService, StandardizedAddress, SubscriptionEventType,
     SubscriptionResponse, TrackingEvent, TrackingExpand, TrackingResponse, TrackingService,
     WebhooksService, ZipCodeLookupRequest,
 };
@@ -112,5 +115,6 @@ pub use services::locations;
 pub use services::manifests;
 pub use services::pickup;
 pub use services::prices;
+pub use services::standards;
 pub use services::tracking;
 pub use services::webhooks;
