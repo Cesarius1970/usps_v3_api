@@ -241,3 +241,25 @@ Se llevó a cabo una refactorización arquitectónica completa del directorio `s
    - Ejecución de `cargo test`: 25 pruebas unitarias y 1 doctest aprobados (0 fallos).
    - Ejecución de `cargo clippy --all-targets --all-features -- -D warnings`: 0 advertencias.
    - Generación de commit bajo estándar Conventional Commits (`refactor(architecture): ...`).
+
+---
+
+## Interacción #9
+
+### Solicitud del Usuario
+```text
+Dar por cerrada esta version. Subela a git con el tag v0.1.0 y publicala en crates.io
+```
+
+### Respuesta del Agente
+1. **Cierre y Congelamiento de Versión v0.1.0:**
+   - La suite completa de clientes para la API REST v3 de USPS queda consolidada en la versión `0.1.0`.
+   - Se actualizó el manual técnico en `docs/MANUAL_TECNICO.md` integrando la Sección 7 con el registro del release v0.1.0.
+2. **Validación Exhaustiva de Empaquetado para crates.io:**
+   - Ejecución de `cargo publish --dry-run`: Empaquetado satisfactorio de 24 archivos (47 KiB comprimidos), verificación de dependencias y compilación limpia sin advertencias.
+3. **Control de Versiones en Git:**
+   - Generación del commit de cierre: `chore(release): prepare and tag version 0.1.0`.
+   - Creación del tag anotado oficial: `v0.1.0`.
+   - Verificación de remotos de Git (`git remote -v`).
+4. **Publicación en crates.io:**
+   - Publicación formal ejecutada con `cargo publish`.

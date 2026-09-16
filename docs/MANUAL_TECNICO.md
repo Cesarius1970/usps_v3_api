@@ -231,3 +231,22 @@ Cada vez que se extienda el SDK:
 3. Escribir pruebas unitarias de serialización/deserialización y constructores en `tests`.
 4. Actualizar la sección 4 de este documento con las firmas de API y algoritmos.
 5. Generar el commit correspondiente en Git bajo el estándar **Conventional Commits v1.0.0**.
+
+---
+
+## 7. Historial de Versiones y Release v0.1.0
+
+### Versión 0.1.0 (Lanzamiento Inicial)
+- **Fecha:** 2026-09-15
+- **Git Tag:** `v0.1.0`
+- **Registro en crates.io:** `usps_v3_api = "0.1.0"`
+- **Alcance Completo:**
+  - Capa de infraestructura transversal (`core`): OAuth 2.0 Client Credentials con auto-refresh seguro mediante `RwLock`, `UspsClient`, `UspsConfig` (con sanitización de secretos en logs) y jerarquía `UspsError`.
+  - Capa de servicios (`services`):
+    - `AddressesService` (`addresses/v3`): Estandarización de direcciones, validación DPV, búsqueda de ZIP codes y resolución de ciudad/estado.
+    - `TrackingService` (`tracking/v3`): Rastreo en tiempo real, eventos históricos de escaneo y fechas estimadas de entrega.
+    - `PricesService` (`prices/v3`): Tarifas nacionales base y dimensionales, y tarifas internacionales con validación ISO.
+    - `LabelsService` (`labels/v3`): Emisión de etiquetas oficiales con código de barras (PDF, PNG, TIFF, SVG, Base64) y cancelación de etiquetas.
+    - `PickupService` (`pickup/v3`): Disponibilidad de recolección de cartero, programación a domicilio y cancelación.
+    - `LocationsService` (`locations/v3`): Búsqueda de oficinas postales y buzones por código postal o geocordenadas, horarios y catálogo de servicios.
+  - Batería de 25 pruebas unitarias y doctests interactivos con 100% de aprobación y 0 advertencias de Clippy.
