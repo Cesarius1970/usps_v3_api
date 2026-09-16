@@ -39,8 +39,12 @@ Agrega `usps_v3_api` a tu `Cargo.toml`:
 
 ```toml
 [dependencies]
+# Por defecto utiliza 'rustls-tls' (cero dependencias de C / OpenSSL)
 usps_v3_api = "0.2.0"
 tokio = { version = "1", features = ["full"] }
+
+# O si prefieres utilizar los certificados nativos del sistema operativo (OpenSSL / SChannel / SecurityFramework):
+# usps_v3_api = { version = "0.2.0", default-features = false, features = ["native-tls"] }
 ```
 
 ---

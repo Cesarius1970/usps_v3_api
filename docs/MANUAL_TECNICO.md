@@ -309,6 +309,11 @@ Se utiliza `wiremock` para probar de forma determinística y sin dependencias ex
 - **Mapeo Tipado de Errores de API:** Deserialización y verificación de estructuras `UspsError::Api` y `UspsApiErrorResponse` con mensajes estructurados de USPS.
 - **Prueba Electrónica de Entrega (ePOD) y Servicios Especiales:** Simulación de recepción de comprobante de entrega firmado y cotización de seguros y servicios adicionales.
 
+### 5.3. Selección de Motor TLS (Feature Flags)
+El crate ofrece flexibilidad de infraestructura criptográfica mediante características configurables en `Cargo.toml`:
+- `rustls-tls` (**por defecto**): Implementación moderna 100% Rust basada en Rustls, ideal para despliegues en contenedores mínimos (Docker Scratch/Alpine), compilación estática `musl` y entornos sin bibliotecas OpenSSL de C.
+- `native-tls`: Utiliza la pila criptográfica nativa del sistema operativo anfitrión (OpenSSL en Linux, Secure Transport en macOS, SChannel en Windows).
+
 ---
 
 ## 6. Mantenimiento Continuo

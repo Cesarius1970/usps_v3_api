@@ -13,8 +13,13 @@ documentation = "https://docs.rs/usps_v3_api"
 keywords = ["usps", "postal", "shipping", "tracking", "api"]
 categories = ["api-bindings", "asynchronous", "web-programming::http-client"]
 
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+native-tls = ["reqwest/default-tls"]
+
 [dependencies]
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
 tokio = { version = "1.43", features = ["rt", "sync", "time", "macros"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

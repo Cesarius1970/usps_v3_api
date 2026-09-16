@@ -451,3 +451,33 @@ Se continuó con la siguiente fase integral de desarrollo del SDK, agregando cap
    - Actualización sincrónica del manual técnico `docs/MANUAL_TECNICO.md` y `README.md`.
    - Ejecución de las pruebas y verificación de calidad con cero advertencias.
    - Generación de commit bajo estándar Conventional Commits (`feat(sdk): add Extra Services pricing, electronic proof of delivery, and CHANGELOG`).
+
+---
+
+## Interacción #15
+
+### Solicitud del Usuario
+```text
+Continuar con las siguientes fases del desarrollo segun el plan
+```
+
+### Respuesta del Agente
+Se completó la siguiente fase del plan de desarrollo, dotando al SDK de soporte para múltiples motores TLS configurables mediante Cargo Feature Flags e integrando su documentación en el manual y changelog:
+
+1. **Soporte Multi-Motor TLS (`Cargo.toml` - Feature Flags):**
+   - Configuración de la característica `rustls-tls` activada por defecto: implementación moderna 100% Rust basada en Rustls, libre de dependencias de compilación en C/OpenSSL, idónea para contenedores Alpine/Scratch y compilación cruzada `musl`.
+   - Configuración de la característica opcional `native-tls`: permite enlazar con la pila criptográfica y almacén de certificados nativos del sistema operativo (`default-features = false, features = ["native-tls"]`).
+   - Configuración desacoplada en `reqwest` asegurando compatibilidad mutua.
+
+2. **Verificación y Pruebas Cruzadas:**
+   - Compilación y ejecución exitosa de pruebas con el motor por defecto `rustls-tls` (55 pruebas aprobadas).
+   - Compilación y ejecución exitosa de pruebas con `native-tls` (`cargo test --all-targets --no-default-features --features native-tls`).
+   - Compilación y ejecución exhaustiva con `--all-targets --all-features` superada al 100%.
+   - Análisis de linter estricto `cargo clippy --all-targets --all-features -- -D warnings` con 0 advertencias.
+   - Formato validado al 100% con `cargo fmt --check`.
+
+3. **Documentación Técnica y Bitácora:**
+   - Actualización de [`README.md`] con guía de selección de TLS para `Cargo.toml`.
+   - Actualización de [`CHANGELOG.md`] detallando las *feature flags* criptográficas.
+   - Incorporación de la sección 5.3 en [`docs/MANUAL_TECNICO.md`].
+   - Generación de commit bajo estándar Conventional Commits (`feat(core): add configurable TLS engine feature flags (rustls-tls and native-tls)`).

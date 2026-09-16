@@ -19,6 +19,7 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
   - `Electronic Proof of Delivery (ePOD)`: solicitud de comprobante oficial de entrega firmado vía email (`request_proof_of_delivery`).
   - `track_batch`: consulta masiva de hasta 35 números de seguimiento en una sola petición.
 - **Resiliencia y Concurrencia:**
+  - Selección de motor TLS mediante *feature flags* en `Cargo.toml`: `rustls-tls` (activado por defecto, compilación 100% Rust sin dependencias C) y `native-tls` (opcional, certificados del sistema operativo).
   - `RetryPolicy` con retroceso exponencial (*exponential backoff*) y *jitter* determinístico ante códigos HTTP transitorios (429, 500, 502, 503, 504).
   - Integración transparente en `UspsClient` para reintentos sin intervención del consumidor.
 - **Pruebas y Verificación:**
