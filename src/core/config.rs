@@ -11,7 +11,7 @@
 use std::fmt;
 use std::time::Duration;
 
-use crate::error::{Result, UspsError};
+use super::error::{Result, UspsError};
 
 /// URL base oficial del entorno de pruebas CAT (Customer Acceptance Testing / Sandbox) de USPS.
 pub const USPS_CAT_BASE_URL: &str = "https://api-cat.usps.com";
@@ -43,7 +43,7 @@ impl UspsEnvironment {
     }
 }
 
-/// Configuración de credenciales y parámetros de conexión para el cliente [`crate::client::UspsClient`].
+/// Configuración de credenciales y parámetros de conexión para el cliente [`crate::UspsClient`].
 #[derive(Clone)]
 pub struct UspsConfig {
     /// Client ID de la aplicación registrada en el portal de desarrolladores de USPS.

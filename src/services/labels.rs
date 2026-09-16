@@ -16,9 +16,9 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::client::UspsClient;
-use crate::error::{Result, UspsError};
-use crate::prices::MailClass;
+use super::prices::MailClass;
+use crate::core::client::UspsClient;
+use crate::core::error::{Result, UspsError};
 
 /// Formato de salida y representación gráfica de la etiqueta postal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

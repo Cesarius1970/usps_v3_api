@@ -16,8 +16,8 @@ use serde::Deserialize;
 use tokio::sync::RwLock;
 use tracing::{debug, info, instrument};
 
-use crate::config::UspsConfig;
-use crate::error::{Result, UspsError};
+use super::config::UspsConfig;
+use super::error::{Result, UspsError};
 
 /// Margen de seguridad de 60 segundos para refrescar el token antes de que expire oficialmente.
 const EXPIRATION_BUFFER_SECS: u64 = 60;

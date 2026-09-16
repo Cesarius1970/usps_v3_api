@@ -16,8 +16,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::client::UspsClient;
-use crate::error::{Result, UspsError};
+use crate::core::client::UspsClient;
+use crate::core::error::{Result, UspsError};
 
 /// Clases de correspondencia y servicios de paquetería de USPS.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

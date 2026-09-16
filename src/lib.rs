@@ -14,7 +14,8 @@
 //!
 //! ## Características Principales
 //!
-//! - **Arquitectura Asíncrona:** Construido sobre [`tokio`] y [`reqwest`], diseñado para alta concurrencia.
+//! - **Arquitectura Modular en Capas:** Separación limpia entre infraestructura transversal ([`core`])
+//!   y catálogo de servicios de negocio ([`services`]).
 //! - **Gestión Inteligente de Autenticación OAuth 2.0:** Manejo automático del ciclo de vida del token
 //!   Bearer (`POST /oauth2/v3/token`), con almacenamiento seguro en memoria mediante [`tokio::sync::RwLock`],
 //!   renovación transparente con margen de expiración y patrón double-checked lock.
@@ -24,10 +25,10 @@
 //!   búsqueda de códigos postales (ZIP Lookup) y resolución de ciudad/estado.
 //! - **Servicio de Seguimiento (`Tracking v3`):** Consulta de paquetes en tránsito, detalle de eventos históricos,
 //!   estados y fechas estimadas de entrega.
-//! - **Servicio de Precios y Tarifas (`Prices v3`):** Cotización de tarifas postales nacionales (`POST /prices/v3/base-rates/search`)
-//!   por peso, dimensiones y clases postales (`Priority Mail`, `USPS Ground Advantage`, etc.).
+//! - **Servicio de Precios y Tarifas (`Prices v3`):** Cotización de tarifas postales nacionales e internacionales
+//!   por peso, dimensiones y clases postales (`Priority Mail`, `USPS Ground Advantage`, `Global Express Guaranteed`, etc.).
 //! - **Servicio de Etiquetas (`Labels v3`):** Emisión y cancelación de etiquetas postales con código de barras en
-//!   formatos PDF, PNG o Base64 (`POST /labels/v3/label`, `DELETE /labels/v3/label/{id}`).
+//!   formatos PDF, PNG, TIFF, SVG o Base64 (`POST /labels/v3/label`, `DELETE /labels/v3/label/{id}`).
 //! - **Servicio de Recolección (`Pickup v3`):** Verificación de disponibilidad, programación y cancelación de recolección
 //!   de paquetes por cartero a domicilio (`Carrier Pickup`).
 //! - **Servicio de Ubicaciones (`Locations v3`):** Búsqueda de oficinas postales, buzones de depósito y quioscos
@@ -67,40 +68,38 @@
 //! }
 //! ```
 
-pub mod addresses;
-pub mod auth;
-pub mod client;
-pub mod config;
-pub mod error;
-pub mod labels;
-pub mod locations;
-pub mod pickup;
-pub mod prices;
-pub mod tracking;
+pub mod core;
+pub mod services;
 
-// Re-exportaciones públicas principales
-pub use addresses::{
-    AddressResponse, AddressStandardizationRequest, AddressesService, CityStateResponse,
-    StandardizedAddress, ZipCodeLookupRequest,
+// Re-exportaciones públicas de la capa central (core)
+pub use core::{
+    ApiErrorDetail, OAuthTokenResponse, Result, TokenManager, USPS_CAT_BASE_URL,
+    USPS_PROD_BASE_URL, UspsApiErrorResponse, UspsClient, UspsClientBuilder, UspsConfig,
+    UspsEnvironment, UspsError,
 };
-pub use auth::{OAuthTokenResponse, TokenManager};
-pub use client::{UspsClient, UspsClientBuilder};
-pub use config::{USPS_CAT_BASE_URL, USPS_PROD_BASE_URL, UspsConfig, UspsEnvironment};
-pub use error::{ApiErrorDetail, Result, UspsApiErrorResponse, UspsError};
-pub use labels::{
-    CancelLabelResponse, CreateLabelRequest, CreateLabelResponse, ImageInfo, LabelImageType,
-    LabelPartyAddress, LabelSize, LabelsService, PackageDescription,
+
+// Re-exportaciones públicas del catálogo de servicios
+pub use services::{
+    AddressResponse, AddressStandardizationRequest, AddressesService, CancelLabelResponse,
+    CancelPickupResponse, CityStateResponse, CreateLabelRequest, CreateLabelResponse, DailyHours,
+    DomesticRateRequest, DomesticRateResponse, ImageInfo, InternationalMailClass,
+    InternationalRateRequest, InternationalRateResponse, LabelImageType, LabelPartyAddress,
+    LabelSize, LabelsService, LocationFacility, LocationSearchRequest, LocationSearchResponse,
+    LocationServiceType, LocationsService, MailClass, PackageDescription, PackageLocation,
+    PickupAvailabilityResponse, PickupContactAddress, PickupPackageCount, PickupService,
+    PricesService, ProcessingCategory, RateItem, SchedulePickupRequest, SchedulePickupResponse,
+    StandardizedAddress, TrackingEvent, TrackingExpand, TrackingResponse, TrackingService,
+    ZipCodeLookupRequest,
 };
-pub use locations::{
-    DailyHours, LocationFacility, LocationSearchRequest, LocationSearchResponse,
-    LocationServiceType, LocationsService,
-};
-pub use pickup::{
-    CancelPickupResponse, PackageLocation, PickupAvailabilityResponse, PickupContactAddress,
-    PickupPackageCount, PickupService, SchedulePickupRequest, SchedulePickupResponse,
-};
-pub use prices::{
-    DomesticRateRequest, DomesticRateResponse, InternationalMailClass, InternationalRateRequest,
-    InternationalRateResponse, MailClass, PricesService, ProcessingCategory, RateItem,
-};
-pub use tracking::{TrackingEvent, TrackingExpand, TrackingResponse, TrackingService};
+
+// Módulos públicos canónicos para acceso granular
+pub use core::auth;
+pub use core::client;
+pub use core::config;
+pub use core::error;
+pub use services::addresses;
+pub use services::labels;
+pub use services::locations;
+pub use services::pickup;
+pub use services::prices;
+pub use services::tracking;

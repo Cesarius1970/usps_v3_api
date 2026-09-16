@@ -14,8 +14,8 @@
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::client::UspsClient;
-use crate::error::{Result, UspsError};
+use crate::core::client::UspsClient;
+use crate::core::error::{Result, UspsError};
 
 /// Ubicación donde el remitente dejará los paquetes para el cartero.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]

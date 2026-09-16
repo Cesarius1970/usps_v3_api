@@ -16,8 +16,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::client::UspsClient;
-use crate::error::{Result, UspsError};
+use crate::core::client::UspsClient;
+use crate::core::error::{Result, UspsError};
 
 /// Nivel de detalle solicitado para la consulta de seguimiento.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]

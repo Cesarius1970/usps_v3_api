@@ -203,3 +203,41 @@ Se desarrollaron e integraron secuencialmente las capacidades avanzadas de cober
    - Ejecución de `cargo test`: 25 pruebas unitarias y 1 doctest aprobados (0 fallos).
    - Ejecución de `cargo clippy --all-targets --all-features -- -D warnings`: 0 advertencias.
    - Generación de commit en Git bajo la convención establecida.
+
+---
+
+## Interacción #8
+
+### Solicitud del Usuario
+```text
+Refactoriza el orden de las carpetas de src y ordenalas segun las mejores practicas
+```
+
+### Respuesta del Agente
+Se llevó a cabo una refactorización arquitectónica completa del directorio `src/`, aplicando el estándar de diseño en capas para SDKs enterprise en Rust:
+
+1. **Separación de Responsabilidades en Capas (SoC):**
+   - **`src/core/` (Capa de Infraestructura y Transporte):**
+     - `auth.rs`: Autenticación OAuth 2.0, token caching thread-safe con `RwLock`.
+     - `client.rs`: `UspsClient` y `UspsClientBuilder`, despacho de peticiones HTTP autenticadas.
+     - `config.rs`: `UspsConfig`, ambientes `UspsEnvironment` y saneamiento de secretos en logs.
+     - `error.rs`: Jerarquía tipada `UspsError`, `UspsApiErrorResponse` y deserialización de errores.
+     - `mod.rs`: Re-exportaciones públicas de la capa de infraestructura.
+   - **`src/services/` (Capa de Servicios de Negocio USPS v3):**
+     - `addresses.rs`: Normalización postal y validación DPV (`Addresses v3`).
+     - `labels.rs`: Generación de etiquetas con código de barras y anulación (`Labels v3`).
+     - `locations.rs`: Búsqueda de oficinas y buzones (`Locations v3`).
+     - `pickup.rs`: Programación y cancelación de recolección a domicilio (`Pickup v3`).
+     - `prices.rs`: Cotizaciones de tarifas nacionales e internacionales (`Prices v3`).
+     - `tracking.rs`: Seguimiento y eventos de tránsito (`Tracking v3`).
+     - `mod.rs`: Re-exportaciones públicas del catálogo de servicios.
+2. **Preservación Total de Compatibilidad de la API Pública (`src/lib.rs`):**
+   - Se mantuvieron las re-exportaciones de alto nivel en la raíz del crate (`usps_v3_api::*`).
+   - Se agregaron módulos públicos canónicos (`usps_v3_api::core::*` y `usps_v3_api::services::*`) y aliases de retrocompatibilidad directa (`usps_v3_api::addresses::*`, etc.).
+3. **Actualización de Documentación Técnica:**
+   - Actualización de `docs/MANUAL_TECNICO.md` reflejando el nuevo árbol modular y la justificación de la separación de capas.
+4. **Verificación de Calidad y Cierre:**
+   - Ejecución de `cargo fmt --check`: 100% compliant.
+   - Ejecución de `cargo test`: 25 pruebas unitarias y 1 doctest aprobados (0 fallos).
+   - Ejecución de `cargo clippy --all-targets --all-features -- -D warnings`: 0 advertencias.
+   - Generación de commit bajo estándar Conventional Commits (`refactor(architecture): ...`).

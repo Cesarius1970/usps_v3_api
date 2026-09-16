@@ -16,11 +16,15 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tracing::{debug, instrument};
 
-use crate::addresses::AddressesService;
-use crate::auth::TokenManager;
-use crate::config::{UspsConfig, UspsEnvironment};
-use crate::error::{Result, UspsError};
-use crate::tracking::TrackingService;
+use super::auth::TokenManager;
+use super::config::{UspsConfig, UspsEnvironment};
+use super::error::{Result, UspsError};
+use crate::services::addresses::AddressesService;
+use crate::services::labels::LabelsService;
+use crate::services::locations::LocationsService;
+use crate::services::pickup::PickupService;
+use crate::services::prices::PricesService;
+use crate::services::tracking::TrackingService;
 
 /// Cliente principal asíncrono y thread-safe para interactuar con la API REST v3 de USPS.
 ///
@@ -86,26 +90,26 @@ impl UspsClient {
 
     /// Retorna el servicio de consulta de precios y tarifas (`Prices v3`).
     #[must_use]
-    pub fn prices(&self) -> crate::prices::PricesService {
-        crate::prices::PricesService::new(self.clone())
+    pub fn prices(&self) -> PricesService {
+        PricesService::new(self.clone())
     }
 
     /// Retorna el servicio de emisión y anulación de etiquetas postales (`Labels v3`).
     #[must_use]
-    pub fn labels(&self) -> crate::labels::LabelsService {
-        crate::labels::LabelsService::new(self.clone())
+    pub fn labels(&self) -> LabelsService {
+        LabelsService::new(self.clone())
     }
 
     /// Retorna el servicio de programación y gestión de recolección de paquetes (`Pickup v3`).
     #[must_use]
-    pub fn pickup(&self) -> crate::pickup::PickupService {
-        crate::pickup::PickupService::new(self.clone())
+    pub fn pickup(&self) -> PickupService {
+        PickupService::new(self.clone())
     }
 
     /// Retorna el servicio de búsqueda y consulta de instalaciones y oficinas postales (`Locations v3`).
     #[must_use]
-    pub fn locations(&self) -> crate::locations::LocationsService {
-        crate::locations::LocationsService::new(self.clone())
+    pub fn locations(&self) -> LocationsService {
+        LocationsService::new(self.clone())
     }
 
     /// Retorna el gestor interno de autenticación para consultar o forzar tokens.

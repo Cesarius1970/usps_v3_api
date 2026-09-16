@@ -14,8 +14,8 @@
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::client::UspsClient;
-use crate::error::{Result, UspsError};
+use crate::core::client::UspsClient;
+use crate::core::error::{Result, UspsError};
 
 /// Servicios específicos ofrecidos en una oficina o instalación de USPS.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

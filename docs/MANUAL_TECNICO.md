@@ -25,10 +25,11 @@ Se sigue el flujo estándar de Git estructurado por prefijos en minúsculas sepa
 
 - `main`: Rama principal de producción / releases estables.
 - `develop`: Rama de integración de desarrollo continuo (cuando aplique).
-- `feature/<nombre-descriptivo>`: Nuevas funcionalidades o módulos de la API USPS (ej. `feature/oauth2-client`, `feature/tracking-service`, `feature/prices-v3`, `feature/labels-v3`, `feature/pickup-v3`, `feature/locations-v3`).
+- `feature/<nombre-descriptivo>`: Nuevas funcionalidades o módulos de la API USPS (ej. `feature/oauth2-client`, `feature/tracking-service`).
 - `bugfix/<nombre-descriptivo>`: Correcciones de errores o bugs.
 - `hotfix/<nombre-descriptivo>`: Correcciones urgentes y directas sobre releases.
 - `docs/<nombre-descriptivo>`: Cambios exclusivamente dedicados a documentación técnica o bitácoras.
+- `refactor/<nombre-descriptivo>`: Reestructuraciones de código o arquitectura de módulos.
 - `chore/<nombre-descriptivo>`: Tareas de mantenimiento, dependencias o configuración de tooling.
 
 #### Estándar para Mensajes de Commit (Conventional Commits)
@@ -63,6 +64,7 @@ Tipos permitidos:
    - **Ejecución orientada a objetivos:** Metas con criterios de verificación medibles (`cargo test`, `cargo clippy`).
 
 2. **Mejores Prácticas de Rust (Apollo Guidelines):**
+   - Arquitectura modular en capas con separación nítida entre infraestructura (`core`) y servicios de dominio (`services`).
    - Priorizar referencias (`&str`, `&[T]`) sobre clones y traspasos de propiedad innecesarios.
    - Jerarquía de errores fuertemente tipada con `thiserror`.
    - Prohibido el uso de `unwrap()` o `expect()` fuera del alcance de tests (`#[cfg(test)]`).
@@ -77,7 +79,9 @@ Tipos permitidos:
 
 ## 3. Arquitectura y Componentes del Software
 
-### 3.1. Estructura de Directorios
+### 3.1. Estructura de Directorios Refactorizada en Capas
+El proyecto aplica el patrón de diseño enterprise en capas (Layered / Domain-Driven Architecture), separando la infraestructura transversal de los servicios de negocio de USPS:
+
 ```text
 usps_v3_api/
 ├── Cargo.toml                  # Manifiesto y metadatos del paquete Rust
@@ -90,24 +94,30 @@ usps_v3_api/
 │   └── histórico/
 │       └── HISTORICO_SOLICITUDES.md # Bitácora cronológica de interacciones
 └── src/
-    ├── addresses.rs            # Módulo de Direcciones v3 (Addresses v3)
-    ├── auth.rs                 # Gestor OAuth 2.0 con auto-refresh y RwLock
-    ├── client.rs               # Cliente central UspsClient y UspsClientBuilder
-    ├── config.rs               # Configuración, entornos y saneamiento de secretos
-    ├── error.rs                # Jerarquía de errores UspsError y deserialización API
-    ├── labels.rs               # Módulo de Etiquetas Postales v3 (Labels v3)
-    ├── lib.rs                  # Raíz de la biblioteca y re-exportaciones públicas
-    ├── locations.rs            # Módulo de Ubicaciones e Instalaciones v3 (Locations v3)
-    ├── pickup.rs               # Módulo de Recolección de Paquetes v3 (Pickup v3)
-    ├── prices.rs               # Módulo de Precios y Tarifas Nacionales/Internacionales (Prices v3)
-    └── tracking.rs             # Módulo de Seguimiento de Envíos v3 (Tracking v3)
+    ├── lib.rs                  # Raíz del crate, re-exportaciones canónicas y doctests
+    ├── core/                   # CAPA CENTRAL (Infraestructura y Transporte)
+    │   ├── mod.rs              # Re-exportaciones públicas de la capa core
+    │   ├── auth.rs             # Gestor OAuth 2.0 con auto-refresh y RwLock
+    │   ├── client.rs           # Cliente central UspsClient y UspsClientBuilder
+    │   ├── config.rs           # Configuración, entornos y saneamiento de secretos
+    │   └── error.rs            # Jerarquía de errores UspsError y deserialización API
+    └── services/               # CAPA DE SERVICIOS (Dominios de Negocio USPS v3)
+        ├── mod.rs              # Re-exportaciones públicas del catálogo de servicios
+        ├── addresses.rs        # Módulo de Direcciones v3 (Addresses v3)
+        ├── labels.rs           # Módulo de Etiquetas Postales v3 (Labels v3)
+        ├── locations.rs        # Módulo de Ubicaciones e Instalaciones v3 (Locations v3)
+        ├── pickup.rs           # Módulo de Recolección de Paquetes v3 (Pickup v3)
+        ├── prices.rs           # Módulo de Precios y Tarifas Nacionales/Internacionales (Prices v3)
+        └── tracking.rs         # Módulo de Seguimiento de Envíos v3 (Tracking v3)
 ```
 
 ---
 
 ## 4. Detalle de Módulos, Patrones y Algoritmos
 
-### 4.1. Módulo de Errores (`src/error.rs`)
+### 4.1. Capa Central (`src/core/`)
+
+#### 4.1.1. Módulo de Errores (`src/core/error.rs`)
 - **Propósito:** Proporcionar una jerarquía tipada que permita al consumidor inspeccionar la causa exacta de una falla sin conversiones de cadenas opacas.
 - **Tipos clave:**
   - `UspsError`: Enum que agrupa errores de red (`reqwest::Error`), serialización (`serde_json::Error`), autenticación OAuth 2.0 (`UspsError::Auth`), datos de entrada inválidos (`UspsError::InvalidInput`) y errores de API (`UspsError::Api`).
@@ -115,7 +125,7 @@ usps_v3_api/
 - **Algoritmo `UspsError::from_response(status, body)`:**
   Evalúa el cuerpo HTTP retornado; si es un JSON estructurado, extrae los detalles técnicos y advertencias de USPS; si no lo es (ej. error 502 de gateway intermedio), realiza fallback seguro sin entrar en pánico.
 
-### 4.2. Módulo de Configuración (`src/config.rs`)
+#### 4.1.2. Módulo de Configuración (`src/core/config.rs`)
 - **Propósito:** Gestionar credenciales, timeouts y selección de endpoints según el ambiente.
 - **Ambientes soportados (`UspsEnvironment`):**
   - `Sandbox`: `https://api-cat.usps.com` (Entorno oficial de pruebas CAT de USPS).
@@ -124,7 +134,7 @@ usps_v3_api/
 - **Patrón de Seguridad (Sanitización en Debug):**
   Se implementa `std::fmt::Debug` manualmente para `UspsConfig`, sustituyendo el campo sensible `client_secret` por `"[REDACTED]"`. Esto previene fugas accidentales de secretos en sistemas de telemetría y logs.
 
-### 4.3. Módulo de Autenticación (`src/auth.rs`)
+#### 4.1.3. Módulo de Autenticación (`src/core/auth.rs`)
 - **Propósito:** Automatizar la obtención y el refresco transparente del Bearer Token OAuth 2.0 (`POST /oauth2/v3/token`).
 - **Algoritmo de Concurrencia Segura:**
   1. Adquiere un bloqueo de lectura (`read().await`) sobre `cached_token` (`tokio::sync::RwLock`). Si el token existe y aún no ha alcanzado su margen de expiración (`is_valid()`), se retorna de inmediato sin bloquear a otras tareas concurrentes.
@@ -132,7 +142,7 @@ usps_v3_api/
   3. Ejecuta el patrón *double-checked locking*: verifica si otra tarea concurrente ya renovó el token mientras se esperaba el bloqueo.
   4. Si continúa inválido, emite la llamada HTTP `POST /oauth2/v3/token` con `grant_type=client_credentials`, almacena el nuevo token con su timestamp de caducidad calculada y lo retorna.
 
-### 4.4. Módulo de Cliente Central (`src/client.rs`)
+#### 4.1.4. Módulo de Cliente Central (`src/core/client.rs`)
 - **Propósito:** Punto único de orquestación, conexión HTTP y despacho de peticiones.
 - **Diseño con Puntero Atómico (`Arc`):**
   `UspsClient` encapsula un `Arc<UspsClientInner>`, permitiendo su clonación a costo insignificante (incremento de puntero atómico) para distribuirlo entre múltiples hilos o tareas concurrentes de Tokio.
@@ -146,39 +156,43 @@ usps_v3_api/
   - `client.pickup()` -> `PickupService`
   - `client.locations()` -> `LocationsService`
 
-### 4.5. Módulo de Direcciones (`src/addresses.rs`)
+---
+
+### 4.2. Capa de Servicios de Negocio (`src/services/`)
+
+#### 4.2.1. Módulo de Direcciones (`src/services/addresses.rs`)
 - **Propósito:** Normalizar y validar direcciones postales en Estados Unidos según la base de datos de USPS.
 - **Servicios:**
   - `standardize(&AddressStandardizationRequest) -> Result<AddressResponse>`: Consulta `GET /addresses/v3/address`. Retorna la dirección en formato estándar de USPS, códigos ZIP+4, confirmación DPV (`DPVConfirmation`), indicación de entrega comercial (`DPVCMRA`), indicador de negocio y vacancia.
   - `lookup_zip_code(&ZipCodeLookupRequest) -> Result<AddressResponse>`: Consulta `GET /addresses/v3/zipcode` para resolver el código postal correspondiente a una dirección.
   - `lookup_city_state(zip_code) -> Result<CityStateResponse>`: Consulta `GET /addresses/v3/city-state` validando previamente que el código postal conste de 5 dígitos numéricos.
 
-### 4.6. Módulo de Seguimiento (`src/tracking.rs`)
+#### 4.2.2. Módulo de Seguimiento (`src/services/tracking.rs`)
 - **Propósito:** Seguimiento de envíos postales en tiempo real.
 - **Servicios:**
   - `track(tracking_number) -> Result<TrackingResponse>`: Consulta detallada de la línea de tiempo completa del paquete (`TrackingExpand::Detail`).
   - `track_with_expand(tracking_number, TrackingExpand) -> Result<TrackingResponse>`: Permite seleccionar entre historial detallado (`TrackingExpand::Detail`) o resumen del estado actual (`TrackingExpand::Summary`).
 
-### 4.7. Módulo de Precios y Tarifas (`src/prices.rs`)
+#### 4.2.3. Módulo de Precios y Tarifas (`src/services/prices.rs`)
 - **Propósito:** Cálculo y cotización de tarifas de franqueo para envíos nacionales e internacionales.
 - **Servicios:**
   - `calculate_domestic_rates(&DomesticRateRequest) -> Result<DomesticRateResponse>`: Despacha `POST /prices/v3/base-rates/search`. Soporta `MailClass` (*Priority Mail, USPS Ground Advantage, Priority Mail Express, etc.*) y `ProcessingCategory`.
   - `calculate_international_rates(&InternationalRateRequest) -> Result<InternationalRateResponse>`: Despacha `POST /prices/v3/international-base-rates/search`. Valida el código de país de 2 caracteres ISO (ej. `CA`, `GB`, `MX`, `ES`) y soporta `InternationalMailClass` (*Global Express Guaranteed, Priority Mail International, First-Class Package International, etc.*).
 
-### 4.8. Módulo de Etiquetas Postales (`src/labels.rs`)
+#### 4.2.4. Módulo de Etiquetas Postales (`src/services/labels.rs`)
 - **Propósito:** Generación, emisión y cancelación de etiquetas postales con código de barras USPS.
 - **Servicios:**
   - `create_label(&CreateLabelRequest) -> Result<CreateLabelResponse>`: Despacha `POST /labels/v3/label`. Soporta formatos gráficos `LabelImageType` (*PDF, PNG, TIFF, SVG*) y entrega de imagen Base64 o URL de descarga directa.
   - `cancel_label(label_id) -> Result<CancelLabelResponse>`: Despacha `DELETE /labels/v3/label/{labelId}` para anular etiquetas y tramitar reembolsos de franqueo.
 
-### 4.9. Módulo de Recolección de Paquetes (`src/pickup.rs`)
+#### 4.2.5. Módulo de Recolección de Paquetes (`src/services/pickup.rs`)
 - **Propósito:** Gestión integral de recolección de paquetes por el cartero a domicilio (`Carrier Pickup`).
 - **Servicios:**
   - `check_availability(zip_code) -> Result<PickupAvailabilityResponse>`: Consulta `GET /pickup/v3/carrier-pickup/availability?ZIPCode={zip_code}`.
   - `schedule(&SchedulePickupRequest) -> Result<SchedulePickupResponse>`: Despacha `POST /pickup/v3/carrier-pickup`. Permite designar ubicación (`PackageLocation`: `FrontDoor`, `BackDoor`, `InMailbox`, etc.) y conteo de paquetes por clase (`PickupPackageCount`).
   - `cancel(confirmation_number) -> Result<CancelPickupResponse>`: Despacha `DELETE /pickup/v3/carrier-pickup/{confirmationNumber}`.
 
-### 4.10. Módulo de Ubicaciones e Instalaciones (`src/locations.rs`)
+#### 4.2.6. Módulo de Ubicaciones e Instalaciones (`src/services/locations.rs`)
 - **Propósito:** Búsqueda y consulta de instalaciones físicas de USPS, buzones de depósito y quioscos automatizados.
 - **Servicios:**
   - `search(&LocationSearchRequest) -> Result<LocationSearchResponse>`: Consulta `GET /locations/v3/location`. Permite búsqueda por código postal (`from_zip_code`) o coordenadas geográficas (`from_coordinates`), radio en millas y filtrado por servicios (`LocationServiceType`: `PassportAppointments`, `PoBoxes`, `RetailServices`, `CollectionBox`, `SelfServiceKiosks`, etc.).
@@ -212,7 +226,8 @@ cargo doc --no-deps --open
 ## 6. Mantenimiento Continuo
 
 Cada vez que se extienda el SDK:
-1. Añadir los contratos de datos y endpoints en submódulos dedicados en `src/`.
-2. Escribir pruebas unitarias de serialización/deserialización y constructores en `tests`.
-3. Actualizar la sección 4 de este documento con las firmas de API y algoritmos.
-4. Generar el commit correspondiente en Git bajo el estándar **Conventional Commits v1.0.0**.
+1. Añadir los contratos de datos y endpoints en el submódulo correspondiente dentro de `src/services/` (o en `src/core/` si es infraestructura).
+2. Exponer el servicio en `src/services/mod.rs` y re-exportar en `src/lib.rs`.
+3. Escribir pruebas unitarias de serialización/deserialización y constructores en `tests`.
+4. Actualizar la sección 4 de este documento con las firmas de API y algoritmos.
+5. Generar el commit correspondiente en Git bajo el estándar **Conventional Commits v1.0.0**.
