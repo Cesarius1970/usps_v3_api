@@ -338,10 +338,12 @@ Cada vez que se extienda el SDK:
   - Servicios v3: Direcciones, Tracking individual, Tarifas nacionales e internacionales, Etiquetas postales, Recolección a domicilio y Ubicaciones de oficinas.
   - Batería de 25 pruebas unitarias.
 
-### Versión 0.2.0 (Resiliencia, Estándares de Entrega, Pagos EPS, Aduana, Label Broker, Extra Services, ePOD, Mock Testing y CI/CD)
+### Versión 0.2.0 (Resiliencia, Estándares de Entrega, Pagos EPS, Aduana, Label Broker, Extra Services, ePOD, Mock Testing, Feature Flags y CI/CD)
 - **Fecha:** 2026-09-15
-- **Git Branch:** `main`
+- **Git Tag:** `v0.2.0`
+- **Registro en crates.io:** `usps_v3_api = "0.2.0"`
 - **Novedades de la Versión:**
+  - **Soporte Multi-Motor TLS:** Características configurables `rustls-tls` (por defecto, cero dependencias de C) y `native-tls` (certificados nativos del sistema operativo).
   - **Nueva Resiliencia:** `RetryPolicy` con backoff exponencial y jitter determinístico ante códigos transitorios HTTP 429, 500, 502, 503 y 504 en `UspsClient`.
   - **Soporte Label Broker v3:** Emisión de código QR y Label Broker ID (`create_label_broker`) para impresión en mostradores de oficinas postales y recuperación de datos de etiqueta (`get_label_data`).
   - **Cotización de Servicios Especiales:** Método `calculate_extra_services` en `PricesService` para cotizar seguros, acuse de recibo y confirmación de firma.

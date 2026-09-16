@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/usps_v3_api.svg)](https://crates.io/crates/usps_v3_api)
 [![Documentation](https://docs.rs/usps_v3_api/badge.svg)](https://docs.rs/usps_v3_api)
 [![License: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
-[![CI](https://github.com/cesarvergarab/usps_v3_api/actions/workflows/ci.yml/badge.svg)](https://github.com/cesarvergarab/usps_v3_api/actions)
+[![CI](https://github.com/Cesarius1970/usps_v3_api/actions/workflows/ci.yml/badge.svg)](https://github.com/Cesarius1970/usps_v3_api/actions)
 
 Cliente SDK en Rust idiomático, fuertemente tipado, asíncrono y listo para producción para el ecosistema de **APIs REST v3 de USPS (United States Postal Service)**.
 

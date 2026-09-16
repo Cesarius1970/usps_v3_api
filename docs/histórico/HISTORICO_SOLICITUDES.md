@@ -481,3 +481,31 @@ Se completó la siguiente fase del plan de desarrollo, dotando al SDK de soporte
    - Actualización de [`CHANGELOG.md`] detallando las *feature flags* criptográficas.
    - Incorporación de la sección 5.3 en [`docs/MANUAL_TECNICO.md`].
    - Generación de commit bajo estándar Conventional Commits (`feat(core): add configurable TLS engine feature flags (rustls-tls and native-tls)`).
+
+---
+
+## Interacción #16
+
+### Solicitud del Usuario
+```text
+si, etiquerla, subirla a github y publicarla
+```
+
+### Respuesta del Agente
+Se llevó a cabo la consolidación, etiquetado formal, sincronización con GitHub y publicación en el registro oficial `crates.io` de la versión `0.2.0` del SDK:
+
+1. **Ajuste de Metadatos y Enlaces Oficiales (`Cargo.toml` y `README.md`):**
+   - Actualización de las URLs de repositorio y homepage a `https://github.com/Cesarius1970/usps_v3_api`.
+   - Ajuste de insignias de CI apuntando al flujo de trabajo del repositorio remoto del usuario.
+
+2. **Control de Versiones y Etiquetado en Git:**
+   - Generación del commit de cierre del release: `chore(release): prepare and finalize release v0.2.0`.
+   - Creación del tag anotado oficial: `v0.2.0`.
+   - Publicación de ramas y etiquetas en GitHub (`git push origin main --tags`).
+
+3. **Publicación en crates.io:**
+   - Empaquetado y verificación de integridad final con `cargo publish`.
+   - Paquete publicado exitosamente con la versión `0.2.0` para toda la comunidad de Rust.
+
+4. **Documentación y Cierre de Ciclo:**
+   - Actualización sincrónica de `docs/MANUAL_TECNICO.md` y de la bitácora histórica.
