@@ -19,12 +19,15 @@ use tracing::{debug, instrument};
 use super::auth::TokenManager;
 use super::config::{UspsConfig, UspsEnvironment};
 use super::error::{Result, UspsError};
+use super::retry::RetryPolicy;
 use crate::services::addresses::AddressesService;
 use crate::services::labels::LabelsService;
 use crate::services::locations::LocationsService;
+use crate::services::manifests::ManifestsService;
 use crate::services::pickup::PickupService;
 use crate::services::prices::PricesService;
 use crate::services::tracking::TrackingService;
+use crate::services::webhooks::WebhooksService;
 
 /// Cliente principal asíncrono y thread-safe para interactuar con la API REST v3 de USPS.
 ///
@@ -112,13 +115,25 @@ impl UspsClient {
         LocationsService::new(self.clone())
     }
 
+    /// Retorna el servicio de emisión y gestión de manifiestos SCAN Form (`Manifests v3`).
+    #[must_use]
+    pub fn manifests(&self) -> ManifestsService {
+        ManifestsService::new(self.clone())
+    }
+
+    /// Retorna el servicio de registro de suscripciones y notificaciones webhook (`Subscriptions v3`).
+    #[must_use]
+    pub fn webhooks(&self) -> WebhooksService {
+        WebhooksService::new(self.clone())
+    }
+
     /// Retorna el gestor interno de autenticación para consultar o forzar tokens.
     #[must_use]
     pub fn token_manager(&self) -> &TokenManager {
         &self.inner.token_manager
     }
 
-    /// Ejecuta una solicitud HTTP GET autenticada con parámetros de consulta (`query string`).
+    /// Ejecuta una solicitud HTTP GET autenticada con reintentos automáticos configurados.
     #[instrument(skip(self, query), name = "usps_get_with_query")]
     pub async fn get_with_query<Q, T>(&self, endpoint: &str, query: &Q) -> Result<T>
     where
@@ -126,30 +141,51 @@ impl UspsClient {
         T: DeserializeOwned,
     {
         let url = format!("{}{endpoint}", self.inner.config.environment.base_url());
-        let token = self.inner.token_manager.get_token().await?;
+        let mut attempt = 0;
 
-        debug!("Enviando GET autenticado a {}", url);
-        let response = self
-            .inner
-            .http_client
-            .get(&url)
-            .header("Authorization", format!("Bearer {token}"))
-            .header("Accept", "application/json")
-            .query(query)
-            .send()
-            .await?;
+        loop {
+            let token = self.inner.token_manager.get_token().await?;
 
-        let status = response.status();
-        let body = response.text().await?;
+            debug!("Enviando GET autenticado a {}", url);
+            let response = self
+                .inner
+                .http_client
+                .get(&url)
+                .header("Authorization", format!("Bearer {token}"))
+                .header("Accept", "application/json")
+                .query(query)
+                .send()
+                .await?;
 
-        if !status.is_success() {
+            let status = response.status();
+            let body = response.text().await?;
+
+            if status.is_success() {
+                return serde_json::from_str::<T>(&body).map_err(UspsError::Serialization);
+            }
+
+            if RetryPolicy::is_retryable_status(status)
+                && attempt < self.inner.config.retry_policy.max_retries
+            {
+                attempt += 1;
+                let backoff = self.inner.config.retry_policy.calculate_backoff(attempt);
+                tracing::warn!(
+                    "Error reintentable HTTP {} en {}. Reintentando {}/{} tras {:?}",
+                    status,
+                    endpoint,
+                    attempt,
+                    self.inner.config.retry_policy.max_retries,
+                    backoff
+                );
+                tokio::time::sleep(backoff).await;
+                continue;
+            }
+
             return Err(UspsError::from_response(status, &body));
         }
-
-        serde_json::from_str::<T>(&body).map_err(UspsError::Serialization)
     }
 
-    /// Ejecuta una solicitud HTTP POST autenticada con cuerpo JSON.
+    /// Ejecuta una solicitud HTTP POST autenticada con cuerpo JSON y reintentos automáticos.
     #[instrument(skip(self, body), name = "usps_post_json")]
     pub async fn post_json<B, T>(&self, endpoint: &str, body: &B) -> Result<T>
     where
@@ -157,27 +193,95 @@ impl UspsClient {
         T: DeserializeOwned,
     {
         let url = format!("{}{endpoint}", self.inner.config.environment.base_url());
-        let token = self.inner.token_manager.get_token().await?;
+        let mut attempt = 0;
 
-        debug!("Enviando POST JSON autenticado a {}", url);
-        let response = self
-            .inner
-            .http_client
-            .post(&url)
-            .header("Authorization", format!("Bearer {token}"))
-            .header("Accept", "application/json")
-            .json(body)
-            .send()
-            .await?;
+        loop {
+            let token = self.inner.token_manager.get_token().await?;
 
-        let status = response.status();
-        let body = response.text().await?;
+            debug!("Enviando POST JSON autenticado a {}", url);
+            let response = self
+                .inner
+                .http_client
+                .post(&url)
+                .header("Authorization", format!("Bearer {token}"))
+                .header("Accept", "application/json")
+                .json(body)
+                .send()
+                .await?;
 
-        if !status.is_success() {
+            let status = response.status();
+            let body = response.text().await?;
+
+            if status.is_success() {
+                return serde_json::from_str::<T>(&body).map_err(UspsError::Serialization);
+            }
+
+            if RetryPolicy::is_retryable_status(status)
+                && attempt < self.inner.config.retry_policy.max_retries
+            {
+                attempt += 1;
+                let backoff = self.inner.config.retry_policy.calculate_backoff(attempt);
+                tracing::warn!(
+                    "Error reintentable HTTP {} en {}. Reintentando {}/{} tras {:?}",
+                    status,
+                    endpoint,
+                    attempt,
+                    self.inner.config.retry_policy.max_retries,
+                    backoff
+                );
+                tokio::time::sleep(backoff).await;
+                continue;
+            }
+
             return Err(UspsError::from_response(status, &body));
         }
+    }
 
-        serde_json::from_str::<T>(&body).map_err(UspsError::Serialization)
+    /// Ejecuta una solicitud HTTP DELETE autenticada con reintentos automáticos configurados.
+    #[instrument(skip(self), name = "usps_delete")]
+    pub async fn delete(&self, endpoint: &str) -> Result<String> {
+        let url = format!("{}{endpoint}", self.inner.config.environment.base_url());
+        let mut attempt = 0;
+
+        loop {
+            let token = self.inner.token_manager.get_token().await?;
+
+            debug!("Enviando DELETE autenticado a {}", url);
+            let response = self
+                .inner
+                .http_client
+                .delete(&url)
+                .header("Authorization", format!("Bearer {token}"))
+                .header("Accept", "application/json")
+                .send()
+                .await?;
+
+            let status = response.status();
+            let body = response.text().await?;
+
+            if status.is_success() {
+                return Ok(body);
+            }
+
+            if RetryPolicy::is_retryable_status(status)
+                && attempt < self.inner.config.retry_policy.max_retries
+            {
+                attempt += 1;
+                let backoff = self.inner.config.retry_policy.calculate_backoff(attempt);
+                tracing::warn!(
+                    "Error reintentable HTTP {} en {}. Reintentando {}/{} tras {:?}",
+                    status,
+                    endpoint,
+                    attempt,
+                    self.inner.config.retry_policy.max_retries,
+                    backoff
+                );
+                tokio::time::sleep(backoff).await;
+                continue;
+            }
+
+            return Err(UspsError::from_response(status, &body));
+        }
     }
 }
 
@@ -188,6 +292,7 @@ pub struct UspsClientBuilder {
     client_secret: Option<String>,
     environment: UspsEnvironment,
     timeout: Option<Duration>,
+    retry_policy: Option<RetryPolicy>,
 }
 
 impl UspsClientBuilder {
@@ -223,6 +328,13 @@ impl UspsClientBuilder {
         self
     }
 
+    /// Configura una política de reintentos personalizada.
+    #[must_use]
+    pub fn retry_policy(mut self, policy: RetryPolicy) -> Self {
+        self.retry_policy = Some(policy);
+        self
+    }
+
     /// Construye y valida la instancia de [`UspsClient`].
     ///
     /// # Errores
@@ -241,6 +353,9 @@ impl UspsClientBuilder {
         let mut config = UspsConfig::new(client_id, client_secret, self.environment)?;
         if let Some(timeout) = self.timeout {
             config = config.with_timeout(timeout);
+        }
+        if let Some(retry_policy) = self.retry_policy {
+            config = config.with_retry_policy(retry_policy);
         }
 
         UspsClient::new(config)

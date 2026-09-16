@@ -29,10 +29,16 @@
 //!   por peso, dimensiones y clases postales (`Priority Mail`, `USPS Ground Advantage`, `Global Express Guaranteed`, etc.).
 //! - **Servicio de Etiquetas (`Labels v3`):** Emisión y cancelación de etiquetas postales con código de barras en
 //!   formatos PDF, PNG, TIFF, SVG o Base64 (`POST /labels/v3/label`, `DELETE /labels/v3/label/{id}`).
+//! - **Servicio de Manifiestos (`Manifests v3`):** Consolidación de envíos masivos en un Formulario SCAN Form
+//!   (PS Form 5630) con código de barras maestro (`POST /manifests/v3/manifest`, `GET /manifests/v3/manifest/{id}`).
 //! - **Servicio de Recolección (`Pickup v3`):** Verificación de disponibilidad, programación y cancelación de recolección
 //!   de paquetes por cartero a domicilio (`Carrier Pickup`).
 //! - **Servicio de Ubicaciones (`Locations v3`):** Búsqueda de oficinas postales, buzones de depósito y quioscos
 //!   por código postal o geocordenadas, consulta de horarios semanales y servicios (pasaportes, casilleros).
+//! - **Servicio de Webhooks (`Subscriptions v3`):** Registro, consulta y cancelación de callbacks HTTP en tiempo real
+//!   para eventos de rastreo y entrega (`POST /subscriptions/v3/subscription`, `DELETE /subscriptions/v3/subscription/{id}`).
+//! - **Resiliencia y Reintentos:** Política de backoff exponencial con jitter ([`RetryPolicy`]) ante respuestas transitorias
+//!   HTTP 429 (Rate Limit), 500, 502, 503 y 504.
 //! - **Manejo Exhaustivo de Errores:** Jerarquía fuertemente tipada con [`UspsError`] y deserialización
 //!   de errores estructurados devueltos por la pasarela de USPS.
 //!
@@ -73,7 +79,7 @@ pub mod services;
 
 // Re-exportaciones públicas de la capa central (core)
 pub use core::{
-    ApiErrorDetail, OAuthTokenResponse, Result, TokenManager, USPS_CAT_BASE_URL,
+    ApiErrorDetail, OAuthTokenResponse, Result, RetryPolicy, TokenManager, USPS_CAT_BASE_URL,
     USPS_PROD_BASE_URL, UspsApiErrorResponse, UspsClient, UspsClientBuilder, UspsConfig,
     UspsEnvironment, UspsError,
 };
@@ -81,15 +87,17 @@ pub use core::{
 // Re-exportaciones públicas del catálogo de servicios
 pub use services::{
     AddressResponse, AddressStandardizationRequest, AddressesService, CancelLabelResponse,
-    CancelPickupResponse, CityStateResponse, CreateLabelRequest, CreateLabelResponse, DailyHours,
-    DomesticRateRequest, DomesticRateResponse, ImageInfo, InternationalMailClass,
-    InternationalRateRequest, InternationalRateResponse, LabelImageType, LabelPartyAddress,
-    LabelSize, LabelsService, LocationFacility, LocationSearchRequest, LocationSearchResponse,
-    LocationServiceType, LocationsService, MailClass, PackageDescription, PackageLocation,
-    PickupAvailabilityResponse, PickupContactAddress, PickupPackageCount, PickupService,
-    PricesService, ProcessingCategory, RateItem, SchedulePickupRequest, SchedulePickupResponse,
-    StandardizedAddress, TrackingEvent, TrackingExpand, TrackingResponse, TrackingService,
-    ZipCodeLookupRequest,
+    CancelPickupResponse, CityStateResponse, CreateLabelRequest, CreateLabelResponse,
+    CreateManifestRequest, CreateManifestResponse, CreateSubscriptionRequest, DailyHours,
+    DeleteSubscriptionResponse, DomesticRateRequest, DomesticRateResponse, ImageInfo,
+    InternationalMailClass, InternationalRateRequest, InternationalRateResponse, LabelImageType,
+    LabelPartyAddress, LabelSize, LabelsService, LocationFacility, LocationSearchRequest,
+    LocationSearchResponse, LocationServiceType, LocationsService, MailClass, ManifestsService,
+    PackageDescription, PackageLocation, PickupAvailabilityResponse, PickupContactAddress,
+    PickupPackageCount, PickupService, PricesService, ProcessingCategory, RateItem,
+    SchedulePickupRequest, SchedulePickupResponse, StandardizedAddress, SubscriptionEventType,
+    SubscriptionResponse, TrackingEvent, TrackingExpand, TrackingResponse, TrackingService,
+    WebhooksService, ZipCodeLookupRequest,
 };
 
 // Módulos públicos canónicos para acceso granular
@@ -97,9 +105,12 @@ pub use core::auth;
 pub use core::client;
 pub use core::config;
 pub use core::error;
+pub use core::retry;
 pub use services::addresses;
 pub use services::labels;
 pub use services::locations;
+pub use services::manifests;
 pub use services::pickup;
 pub use services::prices;
 pub use services::tracking;
+pub use services::webhooks;

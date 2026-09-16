@@ -84,6 +84,9 @@ El proyecto aplica el patrón de diseño enterprise en capas (Layered / Domain-D
 
 ```text
 usps_v3_api/
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # Pipeline de integración continua (CI) en GitHub Actions
 ├── Cargo.toml                  # Manifiesto y metadatos del paquete Rust
 ├── LICENSE-APACHE              # Licencia Apache 2.0
 ├── LICENSE-MIT                 # Licencia MIT
@@ -100,15 +103,18 @@ usps_v3_api/
     │   ├── auth.rs             # Gestor OAuth 2.0 con auto-refresh y RwLock
     │   ├── client.rs           # Cliente central UspsClient y UspsClientBuilder
     │   ├── config.rs           # Configuración, entornos y saneamiento de secretos
-    │   └── error.rs            # Jerarquía de errores UspsError y deserialización API
+    │   ├── error.rs            # Jerarquía de errores UspsError y deserialización API
+    │   └── retry.rs            # Política de reintentos con backoff exponencial y jitter
     └── services/               # CAPA DE SERVICIOS (Dominios de Negocio USPS v3)
         ├── mod.rs              # Re-exportaciones públicas del catálogo de servicios
         ├── addresses.rs        # Módulo de Direcciones v3 (Addresses v3)
         ├── labels.rs           # Módulo de Etiquetas Postales v3 (Labels v3)
         ├── locations.rs        # Módulo de Ubicaciones e Instalaciones v3 (Locations v3)
+        ├── manifests.rs        # Módulo de Manifiestos SCAN Form v3 (Manifests v3)
         ├── pickup.rs           # Módulo de Recolección de Paquetes v3 (Pickup v3)
         ├── prices.rs           # Módulo de Precios y Tarifas Nacionales/Internacionales (Prices v3)
-        └── tracking.rs         # Módulo de Seguimiento de Envíos v3 (Tracking v3)
+        ├── tracking.rs         # Módulo de Seguimiento de Envíos v3 (Tracking v3)
+        └── webhooks.rs         # Módulo de Suscripciones y Webhooks v3 (Subscriptions v3)
 ```
 
 ---
@@ -147,14 +153,34 @@ usps_v3_api/
 - **Diseño con Puntero Atómico (`Arc`):**
   `UspsClient` encapsula un `Arc<UspsClientInner>`, permitiendo su clonación a costo insignificante (incremento de puntero atómico) para distribuirlo entre múltiples hilos o tareas concurrentes de Tokio.
 - **Patrón Builder (`UspsClientBuilder`):**
-  Permite configuración fluida de credenciales, timeout y entorno con validación previa de datos obligatorios.
+  Permite configuración fluida de credenciales, timeout, política de reintentos y entorno con validación previa de datos obligatorios.
+- **Métodos HTTP Reutilizables:**
+  - `get_with_query(endpoint, query)`: Despacho de peticiones GET autenticadas con bucle de reintentos y deserialización JSON.
+  - `post_json(endpoint, body)`: Despacho de peticiones POST autenticadas con cuerpo JSON, bucle de reintentos y deserialización.
+  - `delete(endpoint)`: Despacho de peticiones DELETE autenticadas con bucle de reintentos y soporte de respuestas vacías (204/200).
 - **Servicios Integrados:**
   - `client.addresses()` -> `AddressesService`
   - `client.tracking()` -> `TrackingService`
   - `client.prices()` -> `PricesService`
   - `client.labels()` -> `LabelsService`
-  - `client.pickup()` -> `PickupService`
   - `client.locations()` -> `LocationsService`
+  - `client.manifests()` -> `ManifestsService`
+  - `client.pickup()` -> `PickupService`
+  - `client.webhooks()` -> `WebhooksService`
+
+#### 4.1.5. Módulo de Reintentos y Resiliencia (`src/core/retry.rs`)
+- **Propósito:** Manejo automático y transparente de fallos transitorios de red y límites de velocidad de la API de USPS.
+- **Estructura `RetryPolicy`:**
+  - `max_retries`: Número máximo de intentos (por defecto 3).
+  - `initial_backoff`: Demora base inicial (por defecto 200 ms).
+  - `max_backoff`: Límite superior de espera (por defecto 5.000 ms).
+  - `backoff_factor`: Factor multiplicador exponencial (por defecto 2.0).
+  - `jitter`: Variación aleatoria pseudo-determinística para mitigar el problema de *thundering herd* hacia la infraestructura de USPS.
+- **Algoritmo de Detección de Códigos Reintentables:**
+  Evalúa el código de estado HTTP y reintenta ante:
+  - `429 Too Many Requests`: Respeto a ventanas de límite de cuota o rate limiting.
+  - `500 Internal Server Error`: Fallos transitorios de los servidores de USPS.
+  - `502 Bad Gateway`, `503 Service Unavailable`, `504 Gateway Timeout`: Inestabilidad temporal de proxies y balanceadores intermedios.
 
 ---
 
@@ -183,14 +209,14 @@ usps_v3_api/
 - **Propósito:** Generación, emisión y cancelación de etiquetas postales con código de barras USPS.
 - **Servicios:**
   - `create_label(&CreateLabelRequest) -> Result<CreateLabelResponse>`: Despacha `POST /labels/v3/label`. Soporta formatos gráficos `LabelImageType` (*PDF, PNG, TIFF, SVG*) y entrega de imagen Base64 o URL de descarga directa.
-  - `cancel_label(label_id) -> Result<CancelLabelResponse>`: Despacha `DELETE /labels/v3/label/{labelId}` para anular etiquetas y tramitar reembolsos de franqueo.
+  - `cancel_label(label_id) -> Result<CancelLabelResponse>`: Despacha `DELETE /labels/v3/label/{labelId}` para anular etiquetas y tramitar reembolsos de franqueo utilizando el cliente HTTP centralizado con reintentos.
 
 #### 4.2.5. Módulo de Recolección de Paquetes (`src/services/pickup.rs`)
 - **Propósito:** Gestión integral de recolección de paquetes por el cartero a domicilio (`Carrier Pickup`).
 - **Servicios:**
   - `check_availability(zip_code) -> Result<PickupAvailabilityResponse>`: Consulta `GET /pickup/v3/carrier-pickup/availability?ZIPCode={zip_code}`.
   - `schedule(&SchedulePickupRequest) -> Result<SchedulePickupResponse>`: Despacha `POST /pickup/v3/carrier-pickup`. Permite designar ubicación (`PackageLocation`: `FrontDoor`, `BackDoor`, `InMailbox`, etc.) y conteo de paquetes por clase (`PickupPackageCount`).
-  - `cancel(confirmation_number) -> Result<CancelPickupResponse>`: Despacha `DELETE /pickup/v3/carrier-pickup/{confirmationNumber}`.
+  - `cancel(confirmation_number) -> Result<CancelPickupResponse>`: Despacha `DELETE /pickup/v3/carrier-pickup/{confirmationNumber}` utilizando el cliente HTTP centralizado con reintentos.
 
 #### 4.2.6. Módulo de Ubicaciones e Instalaciones (`src/services/locations.rs`)
 - **Propósito:** Búsqueda y consulta de instalaciones físicas de USPS, buzones de depósito y quioscos automatizados.
@@ -198,17 +224,30 @@ usps_v3_api/
   - `search(&LocationSearchRequest) -> Result<LocationSearchResponse>`: Consulta `GET /locations/v3/location`. Permite búsqueda por código postal (`from_zip_code`) o coordenadas geográficas (`from_coordinates`), radio en millas y filtrado por servicios (`LocationServiceType`: `PassportAppointments`, `PoBoxes`, `RetailServices`, `CollectionBox`, `SelfServiceKiosks`, etc.).
   - `get_details(location_id) -> Result<LocationFacility>`: Consulta `GET /locations/v3/location/{locationId}` para obtener datos de contacto, coordenadas precisas, servicios habilitados y horarios semanales detallados (`DailyHours`).
 
+#### 4.2.7. Módulo de Manifiestos y Formularios SCAN Form (`src/services/manifests.rs`)
+- **Propósito:** Consolidación de múltiples envíos postales individuales en una única hoja de manifiesto oficial de entrega (**USPS SCAN Form - PS Form 5630**) con un único código de barras maestro de aceptación.
+- **Servicios:**
+  - `create_manifest(&CreateManifestRequest) -> Result<CreateManifestResponse>`: Despacha `POST /manifests/v3/manifest`. Requiere la dirección de origen (`LabelPartyAddress`), código postal de 5 dígitos de la oficina de ingreso (`entryFacilityZIPCode`) y la lista de `label_ids` a consolidar.
+  - `get_manifest(manifest_id) -> Result<CreateManifestResponse>`: Consulta `GET /manifests/v3/manifest/{manifestId}` para recuperar el manifiesto emitido previamente.
+
+#### 4.2.8. Módulo de Suscripciones y Webhooks (`src/services/webhooks.rs`)
+- **Propósito:** Registro, administración y baja de callbacks HTTP/HTTPS para recibir notificaciones asíncronas en tiempo real sobre eventos de paquetes y entrega de USPS.
+- **Servicios:**
+  - `subscribe(&CreateSubscriptionRequest) -> Result<SubscriptionResponse>`: Despacha `POST /subscriptions/v3/subscription`. Valida que la URL receptora sea un endpoint HTTP/HTTPS válido y soporta eventos (`SubscriptionEventType`: `TrackingEvents`, `PackageDelivered`, `DeliveryException`, `ReturnToSender`) y clave secreta opcional para verificación de firma HMAC.
+  - `get_subscription(subscription_id) -> Result<SubscriptionResponse>`: Consulta `GET /subscriptions/v3/subscription/{subscriptionId}`.
+  - `delete_subscription(subscription_id) -> Result<DeleteSubscriptionResponse>`: Despacha `DELETE /subscriptions/v3/subscription/{subscriptionId}` utilizando el cliente HTTP centralizado con reintentos.
+
 ---
 
 ## 5. Guía de Compilación, Pruebas y Calidad
 
-El proyecto se valida de extremo a extremo mediante el conjunto de herramientas oficiales de Rust:
+El proyecto se valida de extremo a extremo mediante el conjunto de herramientas oficiales de Rust y CI automatizado:
 
 ```bash
 # Compilar todo el SDK
 cargo build
 
-# Ejecutar las 25 pruebas unitarias y doctests interactivos
+# Ejecutar las 31 pruebas unitarias y doctests interactivos
 cargo test
 
 # Verificar cumplimiento de formato oficial con rustfmt
@@ -220,6 +259,14 @@ cargo clippy --all-targets --all-features -- -D warnings
 # Generar documentación local en HTML
 cargo doc --no-deps --open
 ```
+
+### 5.1. Pipeline de Integración Continua (CI/CD)
+El proyecto incluye un flujo de trabajo de GitHub Actions en `.github/workflows/ci.yml` ejecutado en cada `push` y `pull_request` sobre la rama `main`:
+- **Verificación de Formato:** `cargo fmt --all -- --check`
+- **Análisis Estático:** `cargo clippy --all-targets --all-features -- -D warnings`
+- **Generación de Documentación:** `cargo doc --no-deps --all-features`
+- **Suite de Pruebas:** `cargo test --all-targets --all-features`
+- **Caché Eficiente:** Integración con `Swatinem/rust-cache@v2` para tiempos de compilación mínimos en CI.
 
 ---
 
@@ -234,7 +281,7 @@ Cada vez que se extienda el SDK:
 
 ---
 
-## 7. Historial de Versiones y Release v0.1.0
+## 7. Historial de Versiones
 
 ### Versión 0.1.0 (Lanzamiento Inicial)
 - **Fecha:** 2026-09-15
@@ -250,3 +297,15 @@ Cada vez que se extienda el SDK:
     - `PickupService` (`pickup/v3`): Disponibilidad de recolección de cartero, programación a domicilio y cancelación.
     - `LocationsService` (`locations/v3`): Búsqueda de oficinas postales y buzones por código postal o geocordenadas, horarios y catálogo de servicios.
   - Batería de 25 pruebas unitarias y doctests interactivos con 100% de aprobación y 0 advertencias de Clippy.
+
+### Fase Actual (Camino hacia v0.2.0)
+- **Mejoras de Infraestructura y Resiliencia:**
+  - Incorporación de `RetryPolicy` con backoff exponencial y jitter aleatorio configurable en `UspsConfig`.
+  - Soporte transversal de reintentos para peticiones HTTP GET, POST y DELETE en `UspsClient`.
+  - Método unificado `client.delete()` que reutiliza el pool de conexiones y timeouts configurados.
+- **Nuevos Servicios USPS v3:**
+  - `ManifestsService` (`manifests/v3`): Emisión y consulta de formularios SCAN Form (PS Form 5630) con código maestro.
+  - `WebhooksService` (`subscriptions/v3`): Gestión de suscripciones webhook para eventos de rastreo y entrega en tiempo real.
+- **Control de Calidad & CI/CD:**
+  - Automatización con GitHub Actions (`.github/workflows/ci.yml`).
+  - Cobertura incrementada a 31 pruebas unitarias y doctests con 0 errores y 0 advertencias.

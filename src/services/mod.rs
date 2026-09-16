@@ -11,9 +11,11 @@
 pub mod addresses;
 pub mod labels;
 pub mod locations;
+pub mod manifests;
 pub mod pickup;
 pub mod prices;
 pub mod tracking;
+pub mod webhooks;
 
 pub use addresses::{
     AddressResponse, AddressStandardizationRequest, AddressesService, CityStateResponse,
@@ -27,6 +29,7 @@ pub use locations::{
     DailyHours, LocationFacility, LocationSearchRequest, LocationSearchResponse,
     LocationServiceType, LocationsService,
 };
+pub use manifests::{CreateManifestRequest, CreateManifestResponse, ManifestsService};
 pub use pickup::{
     CancelPickupResponse, PackageLocation, PickupAvailabilityResponse, PickupContactAddress,
     PickupPackageCount, PickupService, SchedulePickupRequest, SchedulePickupResponse,
@@ -36,3 +39,7 @@ pub use prices::{
     InternationalRateResponse, MailClass, PricesService, ProcessingCategory, RateItem,
 };
 pub use tracking::{TrackingEvent, TrackingExpand, TrackingResponse, TrackingService};
+pub use webhooks::{
+    CreateSubscriptionRequest, DeleteSubscriptionResponse, SubscriptionEventType,
+    SubscriptionResponse, WebhooksService,
+};

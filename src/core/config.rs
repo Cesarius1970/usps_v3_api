@@ -12,6 +12,7 @@ use std::fmt;
 use std::time::Duration;
 
 use super::error::{Result, UspsError};
+use super::retry::RetryPolicy;
 
 /// URL base oficial del entorno de pruebas CAT (Customer Acceptance Testing / Sandbox) de USPS.
 pub const USPS_CAT_BASE_URL: &str = "https://api-cat.usps.com";
@@ -54,6 +55,8 @@ pub struct UspsConfig {
     pub environment: UspsEnvironment,
     /// Tiempo de espera (timeout) para las solicitudes HTTP.
     pub timeout: Duration,
+    /// Política de reintentos para mitigar errores transitorios de red o saturación.
+    pub retry_policy: RetryPolicy,
 }
 
 impl fmt::Debug for UspsConfig {
@@ -63,6 +66,7 @@ impl fmt::Debug for UspsConfig {
             .field("client_secret", &"[REDACTED]")
             .field("environment", &self.environment)
             .field("timeout", &self.timeout)
+            .field("retry_policy", &self.retry_policy)
             .finish()
     }
 }
@@ -98,6 +102,7 @@ impl UspsConfig {
             client_secret,
             environment,
             timeout: Duration::from_secs(30),
+            retry_policy: RetryPolicy::default(),
         })
     }
 
@@ -105,6 +110,13 @@ impl UspsConfig {
     #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+
+    /// Define una política de reintentos personalizada.
+    #[must_use]
+    pub fn with_retry_policy(mut self, policy: RetryPolicy) -> Self {
+        self.retry_policy = policy;
         self
     }
 }

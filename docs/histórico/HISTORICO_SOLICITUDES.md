@@ -263,3 +263,45 @@ Dar por cerrada esta version. Subela a git con el tag v0.1.0 y publicala en crat
    - Verificación de remotos de Git (`git remote -v`).
 4. **Publicación en crates.io:**
    - Publicación formal ejecutada con `cargo publish`.
+
+---
+
+## Interacción #10
+
+### Solicitud del Usuario
+```text
+Continuar con las siguientes fases del desarrollo segun el plan
+```
+
+### Respuesta del Agente
+Se continuó con la siguiente fase integral de desarrollo del SDK, incorporando infraestructura de resiliencia avanzada, nuevos servicios oficiales de la API v3 de USPS, pipeline automatizado de CI/CD y ampliación del banco de pruebas:
+
+1. **Infraestructura de Resiliencia y Reintentos (`src/core/retry.rs`):**
+   - Creación de la estructura [`RetryPolicy`] configurable en [`UspsConfig`] y en [`UspsClientBuilder`].
+   - Algoritmo de backoff exponencial con cálculo determinístico de *jitter* para evitar saturación (*thundering herd*).
+   - Detección inteligente de estados HTTP transitorios reintentables: `429 Too Many Requests`, `500 Internal Server Error`, `502 Bad Gateway`, `503 Service Unavailable`, `504 Gateway Timeout`.
+   - Soporte transparente de reintentos automáticos integrado en los despachos HTTP centrales (`get_with_query`, `post_json` y `delete`).
+   - Implementación del método unificado `client.delete()` reutilizando el pool de conexiones existente.
+
+2. **Servicio de Manifiestos Postales SCAN Form (`src/services/manifests.rs` - `Manifests v3`):**
+   - Modelado de solicitud `CreateManifestRequest` con validación estricta de bultos y código postal de oficina de ingreso de 5 dígitos.
+   - Modelado de respuesta `CreateManifestResponse` con código de barras maestro y soporte para formulario PS Form 5630 en PDF o imagen.
+   - Implementación de los métodos `ManifestsService::create_manifest` (`POST /manifests/v3/manifest`) y `ManifestsService::get_manifest` (`GET /manifests/v3/manifest/{id}`).
+   - Re-exportación e integración accesible desde `client.manifests()`.
+
+3. **Servicio de Suscripciones y Notificaciones Webhook (`src/services/webhooks.rs` - `Subscriptions v3`):**
+   - Modelado de tipos de eventos postales con [`SubscriptionEventType`] (`TRACKING_EVENTS`, `PACKAGE_DELIVERED`, `DELIVERY_EXCEPTION`, `RETURN_TO_SENDER`).
+   - Solicitud `CreateSubscriptionRequest` con validación de URL HTTPS y token secreto opcional para validación de firmas HMAC.
+   - Respuestas fuertemente tipadas `SubscriptionResponse` y `DeleteSubscriptionResponse`.
+   - Implementación de métodos `WebhooksService::subscribe`, `WebhooksService::get_subscription` y `WebhooksService::delete_subscription`.
+   - Re-exportación e integración accesible desde `client.webhooks()`.
+
+4. **Automatización de Integración Continua (CI/CD):**
+   - Creación del flujo de trabajo de GitHub Actions en `.github/workflows/ci.yml`.
+   - Verificaciones automáticas en cada `push` y `pull_request` a `main`: formateo (`cargo fmt`), análisis de linter sin advertencias (`cargo clippy`), validación de documentación (`cargo doc`) y suite de pruebas (`cargo test`) con caché de dependencias.
+
+5. **Documentación Técnica y Verificación de Calidad:**
+   - Actualización exhaustiva del árbol de componentes, algoritmos y descripciones de servicios en `docs/MANUAL_TECNICO.md`.
+   - Incorporación de nuevas pruebas unitarias: suite expandida a 31 pruebas unitarias y 1 doctest, todas superadas con éxito.
+   - Verificación estricta de formato (`cargo fmt --check`) y análisis de lints (`cargo clippy --all-targets --all-features -- -D warnings` con 0 advertencias).
+   - Generación de commit bajo estándar Conventional Commits (`feat(sdk): add Manifests v3, Subscriptions v3, and RetryPolicy resilience`).

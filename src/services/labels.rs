@@ -335,22 +335,7 @@ impl LabelsService {
         }
 
         let endpoint = format!("/labels/v3/label/{clean_id}");
-        let url = format!("{}{endpoint}", self.client.config().environment.base_url());
-        let token = self.client.token_manager().get_token().await?;
-
-        let response = reqwest::Client::new()
-            .delete(&url)
-            .header("Authorization", format!("Bearer {token}"))
-            .header("Accept", "application/json")
-            .send()
-            .await?;
-
-        let status = response.status();
-        let body = response.text().await?;
-
-        if !status.is_success() {
-            return Err(UspsError::from_response(status, &body));
-        }
+        let body = self.client.delete(&endpoint).await?;
 
         if body.trim().is_empty() {
             Ok(CancelLabelResponse {
