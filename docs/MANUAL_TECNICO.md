@@ -88,6 +88,7 @@ usps_v3_api/
 │   └── workflows/
 │       └── ci.yml              # Pipeline de integración continua (CI) en GitHub Actions
 ├── Cargo.toml                  # Manifiesto y metadatos del paquete Rust
+├── CHANGELOG.md                 # Registro estandarizado de versiones (Keep a Changelog)
 ├── LICENSE-APACHE              # Licencia Apache 2.0
 ├── LICENSE-MIT                 # Licencia MIT
 ├── NOTICE                      # Atribución y copyright oficial
@@ -204,17 +205,19 @@ usps_v3_api/
   - `lookup_city_state(zip_code) -> Result<CityStateResponse>`: Consulta `GET /addresses/v3/city-state` validando previamente que el código postal conste de 5 dígitos numéricos.
 
 #### 4.2.2. Módulo de Seguimiento (`src/services/tracking.rs`)
-- **Propósito:** Seguimiento de envíos postales en tiempo real, de forma individual o en lotes masivos.
+- **Propósito:** Seguimiento de envíos postales en tiempo real, de forma individual o en lotes masivos, y solicitud de prueba electrónica de entrega firmada.
 - **Servicios:**
   - `track(tracking_number) -> Result<TrackingResponse>`: Consulta detallada de la línea de tiempo completa del paquete (`TrackingExpand::Detail`).
   - `track_with_expand(tracking_number, TrackingExpand) -> Result<TrackingResponse>`: Permite seleccionar entre historial detallado (`TrackingExpand::Detail`) o resumen del estado actual (`TrackingExpand::Summary`).
   - `track_batch(tracking_numbers, TrackingExpand) -> Result<Vec<TrackingResponse>>`: Consulta en una única llamada HTTP de hasta 35 números de seguimiento (`GET /tracking/v3/tracking?trackingNumbers=...`), validando límites y formatos.
+  - `request_proof_of_delivery(&ProofOfDeliveryRequest) -> Result<ProofOfDeliveryResponse>`: Despacha `POST /tracking/v3/proof-of-delivery` para solicitar el envío por correo de la Prueba Electrónica de Entrega (**ePOD**) oficial de USPS con hoja de firma o en formato carta.
 
 #### 4.2.3. Módulo de Precios y Tarifas (`src/services/prices.rs`)
-- **Propósito:** Cálculo y cotización de tarifas de franqueo para envíos nacionales e internacionales.
+- **Propósito:** Cálculo y cotización de tarifas de franqueo para envíos nacionales, internacionales y servicios especiales adicionales.
 - **Servicios:**
   - `calculate_domestic_rates(&DomesticRateRequest) -> Result<DomesticRateResponse>`: Despacha `POST /prices/v3/base-rates/search`. Soporta `MailClass` (*Priority Mail, USPS Ground Advantage, Priority Mail Express, etc.*) y `ProcessingCategory`.
   - `calculate_international_rates(&InternationalRateRequest) -> Result<InternationalRateResponse>`: Despacha `POST /prices/v3/international-base-rates/search`. Valida el código de país de 2 caracteres ISO (ej. `CA`, `GB`, `MX`, `ES`) y soporta `InternationalMailClass` (*Global Express Guaranteed, Priority Mail International, First-Class Package International, etc.*).
+  - `calculate_extra_services(&ExtraServicesRateRequest) -> Result<ExtraServicesRateResponse>`: Despacha `POST /prices/v3/extra-services`. Cotiza tarifas complementarias oficiales (`ExtraServiceType`: seguro de cobertura, acuse de recibo `ReturnReceipt`, confirmación de firma `SignatureConfirmation`, `AdultSignatureRequired`, `RegisteredMail`, etc.).
 
 #### 4.2.4. Módulo de Etiquetas Postales (`src/services/labels.rs`)
 - **Propósito:** Generación, emisión, anulación de etiquetas postales con código de barras USPS y soporte para **USPS Label Broker** (código QR para impresión en ventanilla sin impresora).
@@ -278,7 +281,7 @@ El proyecto se valida de extremo a extremo mediante el conjunto de herramientas 
 # Compilar todo el SDK
 cargo build
 
-# Ejecutar las 49 pruebas (42 unitarias + 4 de integración + 3 de servidor mock wiremock) y doctests interactivos
+# Ejecutar la suite completa de más de 50 pruebas automáticas y doctests interactivos
 cargo test --all-targets --all-features
 
 # Verificar cumplimiento de formato oficial con rustfmt
@@ -304,6 +307,7 @@ Se utiliza `wiremock` para probar de forma determinística y sin dependencias ex
 - **Flujo de Autenticación OAuth 2.0:** Negociación exitosa del token Bearer y validación de caché en memoria sin llamadas duplicadas.
 - **Resiliencia ante HTTP 429:** Simulación de límite de tasa superado (`Too Many Requests`) en el primer intento y éxito en el reintento automático mediante `RetryPolicy`.
 - **Mapeo Tipado de Errores de API:** Deserialización y verificación de estructuras `UspsError::Api` y `UspsApiErrorResponse` con mensajes estructurados de USPS.
+- **Prueba Electrónica de Entrega (ePOD) y Servicios Especiales:** Simulación de recepción de comprobante de entrega firmado y cotización de seguros y servicios adicionales.
 
 ---
 
@@ -329,12 +333,14 @@ Cada vez que se extienda el SDK:
   - Servicios v3: Direcciones, Tracking individual, Tarifas nacionales e internacionales, Etiquetas postales, Recolección a domicilio y Ubicaciones de oficinas.
   - Batería de 25 pruebas unitarias.
 
-### Versión 0.2.0 (Resiliencia, Estándares de Entrega, Pagos EPS, Aduana, Label Broker, Mock Testing y CI/CD)
+### Versión 0.2.0 (Resiliencia, Estándares de Entrega, Pagos EPS, Aduana, Label Broker, Extra Services, ePOD, Mock Testing y CI/CD)
 - **Fecha:** 2026-09-15
 - **Git Branch:** `main`
 - **Novedades de la Versión:**
   - **Nueva Resiliencia:** `RetryPolicy` con backoff exponencial y jitter determinístico ante códigos transitorios HTTP 429, 500, 502, 503 y 504 en `UspsClient`.
   - **Soporte Label Broker v3:** Emisión de código QR y Label Broker ID (`create_label_broker`) para impresión en mostradores de oficinas postales y recuperación de datos de etiqueta (`get_label_data`).
+  - **Cotización de Servicios Especiales:** Método `calculate_extra_services` en `PricesService` para cotizar seguros, acuse de recibo y confirmación de firma.
+  - **Prueba Electrónica de Entrega:** Método `request_proof_of_delivery` en `TrackingService` para solicitar comprobante firmado ePOD por correo electrónico.
   - **Nuevo Servicio:** `ServiceStandardsService` (`service-standards/v3`) para cálculo de fechas estimadas de entrega (EDD) y tiempos de tránsito origen-destino.
   - **Nuevo Servicio:** `PaymentsService` (`payments/v3`) para consulta de saldos EPS y autorizaciones de pago.
   - **Nuevo Módulo de Aduanas:** `CustomsDeclaration` y `CustomsItem` (`customs/v3`) para envíos internacionales con formularios CN22/CP72.
@@ -343,6 +349,6 @@ Cada vez que se extienda el SDK:
   - **Rastreo por Lotes:** Método `track_batch` en `TrackingService` para hasta 35 envíos simultáneos.
   - **Suite de Pruebas de Integración y Mock Server:** Archivos `tests/integration_tests.rs` y `tests/mock_server_tests.rs` con `wiremock` para simulación de respuestas HTTP, OAuth2 y reintentos automáticos.
   - **Ejemplos Prácticos:** Directorio `examples/` con `quickstart.rs` y `shipping_workflow.rs`.
-  - **Documentación y README:** Insignias de crates.io, docs.rs, licencia dual, guía de testing y tabla exhaustiva de servicios.
+  - **Documentación y Changelog:** Archivo `CHANGELOG.md` estandarizado, insignias en `README.md` y manual técnico vivo sincronizado.
   - **Pipeline CI/CD:** Flujo de trabajo en `.github/workflows/ci.yml`.
-  - Cobertura expandida a **49 pruebas automáticas y 1 doctest** con 100% de aprobación y 0 advertencias de Clippy.
+  - Cobertura expandida a **55 pruebas automáticas y 1 doctest** con 100% de aprobación y 0 advertencias de Clippy.

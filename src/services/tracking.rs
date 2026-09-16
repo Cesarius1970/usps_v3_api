@@ -216,6 +216,122 @@ impl TrackingService {
 
         self.client.get_with_query(endpoint, &query).await
     }
+
+    /// Solicita el envío por correo electrónico de la Prueba Electrónica de Entrega (ePOD - Electronic Proof of Delivery).
+    ///
+    /// Realiza una solicitud `POST /tracking/v3/proof-of-delivery`.
+    ///
+    /// # Errores
+    ///
+    /// Retorna [`UspsError::InvalidInput`] si el número de seguimiento, correo o nombres son inválidos o están vacíos.
+    #[instrument(skip(self), name = "request_proof_of_delivery")]
+    pub async fn request_proof_of_delivery(
+        &self,
+        req: &ProofOfDeliveryRequest,
+    ) -> Result<ProofOfDeliveryResponse> {
+        let clean_number = req.tracking_number.trim();
+        if clean_number.is_empty() || clean_number.contains(['/', '?', '&', '#', ' ']) {
+            return Err(UspsError::InvalidInput(
+                "El número de seguimiento no puede estar vacío ni contener caracteres especiales"
+                    .to_string(),
+            ));
+        }
+
+        let clean_email = req.email.trim();
+        if clean_email.is_empty() || !clean_email.contains('@') {
+            return Err(UspsError::InvalidInput(
+                "Debe proporcionar una dirección de correo electrónico válida para recibir el comprobante".to_string(),
+            ));
+        }
+
+        if req.first_name.trim().is_empty() || req.last_name.trim().is_empty() {
+            return Err(UspsError::InvalidInput(
+                "El nombre y apellido del solicitante son obligatorios".to_string(),
+            ));
+        }
+
+        let endpoint = "/tracking/v3/proof-of-delivery";
+        self.client.post_json(endpoint, req).await
+    }
+}
+
+/// Formato solicitado para la Prueba Electrónica de Entrega (ePOD).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ProofOfDeliveryFormat {
+    /// Formato carta oficial de USPS en PDF.
+    Letter,
+    /// Datos y hoja de firma del receptor.
+    Signature,
+}
+
+impl fmt::Display for ProofOfDeliveryFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Letter => write!(f, "LETTER"),
+            Self::Signature => write!(f, "SIGNATURE"),
+        }
+    }
+}
+
+/// Solicitud de Prueba Electrónica de Entrega (`POST /tracking/v3/proof-of-delivery`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProofOfDeliveryRequest {
+    /// Número de seguimiento del envío USPS.
+    pub tracking_number: String,
+    /// Correo electrónico donde se remitirá la prueba de entrega.
+    pub email: String,
+    /// Nombre de pila del solicitante.
+    pub first_name: String,
+    /// Apellidos del solicitante.
+    pub last_name: String,
+    /// Formato deseado del comprobante (carta o firma).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<ProofOfDeliveryFormat>,
+}
+
+impl ProofOfDeliveryRequest {
+    /// Crea una nueva solicitud de prueba de entrega electrónica.
+    #[must_use]
+    pub fn new(
+        tracking_number: impl Into<String>,
+        email: impl Into<String>,
+        first_name: impl Into<String>,
+        last_name: impl Into<String>,
+    ) -> Self {
+        Self {
+            tracking_number: tracking_number.into(),
+            email: email.into(),
+            first_name: first_name.into(),
+            last_name: last_name.into(),
+            format: None,
+        }
+    }
+
+    /// Asigna el formato de entrega preferido (carta o firma).
+    #[must_use]
+    pub fn format(mut self, format: ProofOfDeliveryFormat) -> Self {
+        self.format = Some(format);
+        self
+    }
+}
+
+/// Respuesta tras la solicitud de Prueba Electrónica de Entrega.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProofOfDeliveryResponse {
+    /// Número de seguimiento asociado a la solicitud.
+    pub tracking_number: String,
+    /// Identificador único de solicitud generado por USPS.
+    #[serde(default)]
+    pub request_id: Option<String>,
+    /// Estado de tramitación de la solicitud (ej. "Request Processed", "Request Submitted").
+    #[serde(default)]
+    pub status: Option<String>,
+    /// Correo electrónico confirmado al que se remitió el comprobante.
+    #[serde(default)]
+    pub email: Option<String>,
 }
 
 #[cfg(test)]
@@ -299,5 +415,77 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, UspsError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn proof_of_delivery_request_builder() {
+        let req = ProofOfDeliveryRequest::new(
+            "9400100000000000000000",
+            "shipper@example.com",
+            "Jane",
+            "Doe",
+        )
+        .format(ProofOfDeliveryFormat::Letter);
+
+        assert_eq!(req.tracking_number, "9400100000000000000000");
+        assert_eq!(req.email, "shipper@example.com");
+        assert_eq!(req.first_name, "Jane");
+        assert_eq!(req.last_name, "Doe");
+        assert_eq!(req.format, Some(ProofOfDeliveryFormat::Letter));
+        assert_eq!(ProofOfDeliveryFormat::Letter.to_string(), "LETTER");
+        assert_eq!(ProofOfDeliveryFormat::Signature.to_string(), "SIGNATURE");
+    }
+
+    #[test]
+    fn proof_of_delivery_response_deserialization() {
+        let json = r#"{
+            "trackingNumber": "9400100000000000000000",
+            "requestId": "POD-998877",
+            "status": "Request Processed",
+            "email": "shipper@example.com"
+        }"#;
+
+        let res: ProofOfDeliveryResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(res.tracking_number, "9400100000000000000000");
+        assert_eq!(res.request_id.as_deref(), Some("POD-998877"));
+        assert_eq!(res.status.as_deref(), Some("Request Processed"));
+        assert_eq!(res.email.as_deref(), Some("shipper@example.com"));
+    }
+
+    #[tokio::test]
+    async fn proof_of_delivery_validation_should_fail_on_bad_inputs() {
+        let client = UspsClient::builder()
+            .credentials("test", "secret")
+            .build()
+            .unwrap();
+
+        // Empty tracking
+        let req1 = ProofOfDeliveryRequest::new("", "user@example.com", "Jane", "Doe");
+        let err1 = client
+            .tracking()
+            .request_proof_of_delivery(&req1)
+            .await
+            .unwrap_err();
+        assert!(matches!(err1, UspsError::InvalidInput(_)));
+
+        // Invalid email
+        let req2 =
+            ProofOfDeliveryRequest::new("9400100000000000000000", "invalid-email", "Jane", "Doe");
+        let err2 = client
+            .tracking()
+            .request_proof_of_delivery(&req2)
+            .await
+            .unwrap_err();
+        assert!(matches!(err2, UspsError::InvalidInput(_)));
+
+        // Empty name
+        let req3 =
+            ProofOfDeliveryRequest::new("9400100000000000000000", "user@example.com", "", "Doe");
+        let err3 = client
+            .tracking()
+            .request_proof_of_delivery(&req3)
+            .await
+            .unwrap_err();
+        assert!(matches!(err3, UspsError::InvalidInput(_)));
     }
 }

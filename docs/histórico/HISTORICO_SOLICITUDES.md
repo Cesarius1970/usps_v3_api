@@ -416,3 +416,38 @@ Se completó la siguiente fase del plan de desarrollo, agregando capacidades de 
    - Ejecución de la suite completa de pruebas: **49 pruebas automáticas (42 unitarias + 4 de integración + 3 de wiremock) y 1 doctest**, todas superadas al 100%.
    - Actualización sincrónica del manual técnico `docs/MANUAL_TECNICO.md`.
    - Generación de commit bajo estándar Conventional Commits (`feat(sdk): add Label Broker support, wiremock testing suite, and enhanced README`).
+
+---
+
+## Interacción #14
+
+### Solicitud del Usuario
+```text
+Continuar con las siguientes fases del desarrollo segun el plan
+```
+
+### Respuesta del Agente
+Se continuó con la siguiente fase integral de desarrollo del SDK, agregando capacidades de cotización de servicios adicionales (Extra Services), soporte para la Prueba Electrónica de Entrega (ePOD) con firma, creación del changelog estandarizado del proyecto y expansión de las suites de prueba:
+
+1. **Cotización de Servicios Especiales y Adicionales (`src/services/prices.rs` - `Prices v3`):**
+   - Implementación del método `PricesService::calculate_extra_services` (`POST /prices/v3/extra-services`).
+   - Modelado de opciones [`ExtraServiceType`]: seguro (`Insurance`), acuse de recibo (`ReturnReceipt`), confirmación de firma (`SignatureConfirmation`), entrega a adultos (`AdultSignatureRequired`), entrega restringida (`RestrictedDelivery`) y correo registrado (`RegisteredMail`).
+   - Soporte de solicitud [`ExtraServicesRateRequest`] con validación preventiva de precio base y peso no negativos, y cálculo de cobertura según valor declarado.
+   - Modelado de respuesta [`ExtraServicesRateResponse`] y desglose por ítem [`ExtraServiceRateItem`].
+
+2. **Prueba Electrónica de Entrega ePOD (`src/services/tracking.rs` - `Tracking v3`):**
+   - Implementación del método `TrackingService::request_proof_of_delivery` (`POST /tracking/v3/proof-of-delivery`).
+   - Solicitud estructurada [`ProofOfDeliveryRequest`] con selección de formato [`ProofOfDeliveryFormat`] (`Letter` o `Signature`) y validaciones preventivas de número de rastreo, email con `@` y nombres del solicitante.
+   - Modelado de respuesta [`ProofOfDeliveryResponse`] con confirmación de ID de solicitud y estado de procesamiento.
+
+3. **Registro Estandarizado de Versiones (`CHANGELOG.md`):**
+   - Creación del archivo `CHANGELOG.md` en la raíz del repositorio siguiendo la especificación [Keep a Changelog](https://keepachangelog.com/) y Semantic Versioning.
+   - Documentación exhaustiva de las versiones `0.1.0` y `0.2.0`.
+
+4. **Ampliación de Pruebas y Validación:**
+   - Nuevas pruebas unitarias en `prices.rs` y `tracking.rs`.
+   - Nuevo test con servidor HTTP simulado en `tests/mock_server_tests.rs`: `proof_of_delivery_and_extra_services_mock_flow`.
+   - Nuevas validaciones preventivas de entrada en `tests/integration_tests.rs`.
+   - Actualización sincrónica del manual técnico `docs/MANUAL_TECNICO.md` y `README.md`.
+   - Ejecución de las pruebas y verificación de calidad con cero advertencias.
+   - Generación de commit bajo estándar Conventional Commits (`feat(sdk): add Extra Services pricing, electronic proof of delivery, and CHANGELOG`).

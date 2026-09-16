@@ -20,8 +20,8 @@ Cliente SDK en Rust idiomático, fuertemente tipado, asíncrono y listo para pro
 | Servicio | Módulo | Endpoint Base | Descripción |
 | :--- | :--- | :--- | :--- |
 | **Addresses v3** | `services::addresses` | `/addresses/v3` | Estandarización, validación DPV, búsqueda de ZIP codes y ciudad/estado. |
-| **Tracking v3** | `services::tracking` | `/tracking/v3` | Seguimiento individual y por lotes (hasta 35 paquetes), eventos históricos. |
-| **Prices v3** | `services::prices` | `/prices/v3` | Tarifas nacionales base y dimensionales, y tarifas internacionales por país ISO. |
+| **Tracking v3** | `services::tracking` | `/tracking/v3` | Seguimiento individual y por lotes (hasta 35 paquetes), eventos históricos y Prueba Electrónica de Entrega (ePOD). |
+| **Prices v3** | `services::prices` | `/prices/v3` | Tarifas nacionales base/dimensionales, internacionales y servicios especiales (Extra Services). |
 | **Labels v3** | `services::labels` | `/labels/v3` | Emisión (PDF, PNG, TIFF, SVG, Base64), anulación y código QR **Label Broker**. |
 | **Service Standards v3** | `services::standards` | `/service-standards/v3` | Días de tránsito, compromisos y fechas estimadas de entrega (EDD). |
 | **Manifests v3** | `services::manifests` | `/manifests/v3` | Hojas de manifiesto oficial de entrega **SCAN Form (PS Form 5630)**. |
@@ -104,7 +104,7 @@ El repositorio incluye ejemplos ejecutables en el directorio [`examples/`](examp
 # Compilar proyecto y dependencias
 cargo build
 
-# Ejecutar las 49 pruebas unitarias, de integración y con servidor mock HTTP (wiremock)
+# Ejecutar las más de 50 pruebas unitarias, de integración y con servidor mock HTTP (wiremock)
 cargo test --all-targets --all-features
 
 # Verificar lints estrictos

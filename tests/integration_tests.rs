@@ -144,6 +144,24 @@ async fn invalid_inputs_should_fail_before_network_dispatch() {
         .await
         .unwrap_err();
     assert!(matches!(err, UspsError::InvalidInput(_)));
+
+    // 11. Precios: Servicios adicionales con precio negativo o peso cero
+    let extra_req = ExtraServicesRateRequest::new(MailClass::PriorityMail, -5.0, 1.0);
+    let err = client
+        .prices()
+        .calculate_extra_services(&extra_req)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, UspsError::InvalidInput(_)));
+
+    // 12. Proof of Delivery: Tracking inválido o email vacío
+    let pod_req = ProofOfDeliveryRequest::new(" ", "shipper@example.com", "John", "Doe");
+    let err = client
+        .tracking()
+        .request_proof_of_delivery(&pod_req)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, UspsError::InvalidInput(_)));
 }
 
 #[test]

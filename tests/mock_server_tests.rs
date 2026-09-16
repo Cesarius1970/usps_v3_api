@@ -186,3 +186,83 @@ async fn structured_usps_error_deserialization() {
         other => panic!("Se esperaba UspsError::Api, se obtuvo: {:?}", other),
     }
 }
+
+#[tokio::test]
+async fn proof_of_delivery_and_extra_services_mock_flow() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/oauth2/v3/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "access_token": "mock_token_xyz",
+            "token_type": "Bearer",
+            "expires_in": 3600
+        })))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/prices/v3/extra-services"))
+        .and(header("authorization", "Bearer mock_token_xyz"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "extraServices": [
+                {
+                    "name": "Insurance",
+                    "serviceId": "100",
+                    "price": 3.85,
+                    "description": "Coverage up to $200.00"
+                }
+            ],
+            "warnings": []
+        })))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/tracking/v3/proof-of-delivery"))
+        .and(header("authorization", "Bearer mock_token_xyz"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "trackingNumber": "9400100000000000000000",
+            "requestId": "POD-REQ-12345",
+            "status": "Request Processed",
+            "email": "receiver@example.com"
+        })))
+        .mount(&server)
+        .await;
+
+    let client = UspsClient::builder()
+        .credentials("test_client", "test_secret")
+        .environment(UspsEnvironment::Custom(server.uri()))
+        .build()
+        .expect("Cliente válido");
+
+    let extra_req = ExtraServicesRateRequest::new(MailClass::PriorityMail, 9.85, 1.5)
+        .declared_value(200.0)
+        .add_extra_service(ExtraServiceType::Insurance);
+
+    let extra_res = client
+        .prices()
+        .calculate_extra_services(&extra_req)
+        .await
+        .unwrap();
+    assert_eq!(extra_res.extra_services.len(), 1);
+    assert_eq!(extra_res.extra_services[0].name, "Insurance");
+    assert_eq!(extra_res.extra_services[0].price, 3.85);
+
+    let pod_req = ProofOfDeliveryRequest::new(
+        "9400100000000000000000",
+        "receiver@example.com",
+        "John",
+        "Smith",
+    )
+    .format(ProofOfDeliveryFormat::Letter);
+
+    let pod_res = client
+        .tracking()
+        .request_proof_of_delivery(&pod_req)
+        .await
+        .unwrap();
+    assert_eq!(pod_res.tracking_number, "9400100000000000000000");
+    assert_eq!(pod_res.request_id.as_deref(), Some("POD-REQ-12345"));
+    assert_eq!(pod_res.status.as_deref(), Some("Request Processed"));
+}

@@ -269,6 +269,42 @@ impl PricesService {
         let endpoint = "/prices/v3/international-base-rates/search";
         self.client.post_json(endpoint, req).await
     }
+
+    /// Calcula las tarifas para servicios adicionales o especiales (`POST /prices/v3/extra-services`).
+    ///
+    /// Permite cotizar opciones complementarias como firma de entrega, seguro postal, acuse de recibo o entrega restringida.
+    ///
+    /// # Errores
+    ///
+    /// Retorna [`UspsError::InvalidInput`] si el precio base o el peso son menores a cero, o si el valor declarado es negativo.
+    #[instrument(skip(self), name = "calculate_extra_services")]
+    pub async fn calculate_extra_services(
+        &self,
+        req: &ExtraServicesRateRequest,
+    ) -> Result<ExtraServicesRateResponse> {
+        if req.price < 0.0 {
+            return Err(UspsError::InvalidInput(
+                "El precio de franqueo base no puede ser negativo".to_string(),
+            ));
+        }
+
+        if req.weight <= 0.0 {
+            return Err(UspsError::InvalidInput(
+                "El peso del paquete debe ser estrictamente mayor a 0 libras".to_string(),
+            ));
+        }
+
+        if let Some(val) = req.declared_value {
+            if val < 0.0 {
+                return Err(UspsError::InvalidInput(
+                    "El valor declarado no puede ser negativo".to_string(),
+                ));
+            }
+        }
+
+        let endpoint = "/prices/v3/extra-services";
+        self.client.post_json(endpoint, req).await
+    }
 }
 
 /// Clases de servicio postal internacional de USPS.
@@ -394,6 +430,128 @@ pub struct InternationalRateResponse {
     pub warnings: Vec<String>,
 }
 
+/// Servicios especiales y complementarios de USPS (Extra Services).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ExtraServiceType {
+    /// Certificación de envío con acuse y rastreo especial.
+    CertifiedMail,
+    /// Seguro postal por pérdida o daño de mercancías.
+    Insurance,
+    /// Confirmación de firma del destinatario al momento de entrega.
+    SignatureConfirmation,
+    /// Firma obligatoria de un adulto (21+ años).
+    AdultSignatureRequired,
+    /// Firma obligatoria de adulto con entrega restringida únicamente al destinatario.
+    AdultSignatureRestrictedDelivery,
+    /// Acuse de recibo postal verde o electrónico (Return Receipt).
+    ReturnReceipt,
+    /// Correo registrado (Registered Mail - máxima seguridad con custodia estricta).
+    RegisteredMail,
+    /// Cobro contra entrega (Collect on Delivery - COD).
+    CollectOnDelivery,
+    /// Manejo especial para artículos frágiles o delicados.
+    SpecialHandling,
+    /// Entrega restringida personalmente al destinatario.
+    RestrictedDelivery,
+}
+
+impl fmt::Display for ExtraServiceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::CertifiedMail => write!(f, "CERTIFIED_MAIL"),
+            Self::Insurance => write!(f, "INSURANCE"),
+            Self::SignatureConfirmation => write!(f, "SIGNATURE_CONFIRMATION"),
+            Self::AdultSignatureRequired => write!(f, "ADULT_SIGNATURE_REQUIRED"),
+            Self::AdultSignatureRestrictedDelivery => {
+                write!(f, "ADULT_SIGNATURE_RESTRICTED_DELIVERY")
+            }
+            Self::ReturnReceipt => write!(f, "RETURN_RECEIPT"),
+            Self::RegisteredMail => write!(f, "REGISTERED_MAIL"),
+            Self::CollectOnDelivery => write!(f, "COLLECT_ON_DELIVERY"),
+            Self::SpecialHandling => write!(f, "SPECIAL_HANDLING"),
+            Self::RestrictedDelivery => write!(f, "RESTRICTED_DELIVERY"),
+        }
+    }
+}
+
+/// Solicitud de cotización de servicios adicionales (`POST /prices/v3/extra-services`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtraServicesRateRequest {
+    /// Clase de correo postal para la que se cotizan los servicios adicionales.
+    pub mail_class: MailClass,
+    /// Precio de franqueo base del paquete en USD.
+    pub price: f64,
+    /// Peso del paquete en libras (ej. 2.5).
+    pub weight: f64,
+    /// Valor monetario declarado del paquete en USD (requerido para cotizar seguro).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub declared_value: Option<f64>,
+    /// Lista de tipos de servicios específicos a cotizar (si está vacía, se devuelven todos los compatibles).
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub extra_services: Vec<ExtraServiceType>,
+}
+
+impl ExtraServicesRateRequest {
+    /// Crea una nueva solicitud de cotización de servicios adicionales con clase, precio base y peso.
+    #[must_use]
+    pub fn new(mail_class: MailClass, base_price: f64, weight_lbs: f64) -> Self {
+        Self {
+            mail_class,
+            price: base_price,
+            weight: weight_lbs,
+            declared_value: None,
+            extra_services: Vec::new(),
+        }
+    }
+
+    /// Asigna el valor declarado del paquete para el cálculo del costo de seguro.
+    #[must_use]
+    pub fn declared_value(mut self, value_usd: f64) -> Self {
+        self.declared_value = Some(value_usd);
+        self
+    }
+
+    /// Agrega un tipo de servicio adicional específico a la consulta.
+    #[must_use]
+    pub fn add_extra_service(mut self, service: ExtraServiceType) -> Self {
+        self.extra_services.push(service);
+        self
+    }
+}
+
+/// Detalle de tarifa para un servicio adicional específico cotizado.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtraServiceRateItem {
+    /// Nombre oficial del servicio adicional según USPS.
+    pub name: String,
+    /// Identificador numérico o alfanumérico del servicio si está disponible.
+    #[serde(default)]
+    pub service_id: Option<String>,
+    /// Tarifa adicional calculada en USD.
+    pub price: f64,
+    /// Descripción detallada del servicio adicional.
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Advertencias o restricciones para este servicio.
+    #[serde(default)]
+    pub warnings: Vec<String>,
+}
+
+/// Respuesta de cotización de servicios adicionales (`POST /prices/v3/extra-services`).
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtraServicesRateResponse {
+    /// Desglose de servicios adicionales cotizados y sus costos.
+    #[serde(default)]
+    pub extra_services: Vec<ExtraServiceRateItem>,
+    /// Advertencias generales devueltas por USPS.
+    #[serde(default)]
+    pub warnings: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,5 +658,58 @@ mod tests {
             Some("PRIORITY_MAIL_INTERNATIONAL")
         );
         assert_eq!(res.rates[0].price, 34.50);
+    }
+
+    #[test]
+    fn extra_services_rate_request_builder() {
+        let req = ExtraServicesRateRequest::new(MailClass::PriorityMail, 10.50, 2.0)
+            .declared_value(250.0)
+            .add_extra_service(ExtraServiceType::Insurance)
+            .add_extra_service(ExtraServiceType::SignatureConfirmation);
+
+        assert_eq!(req.mail_class, MailClass::PriorityMail);
+        assert_eq!(req.price, 10.50);
+        assert_eq!(req.weight, 2.0);
+        assert_eq!(req.declared_value, Some(250.0));
+        assert_eq!(req.extra_services.len(), 2);
+        assert_eq!(req.extra_services[0], ExtraServiceType::Insurance);
+        assert_eq!(
+            req.extra_services[1],
+            ExtraServiceType::SignatureConfirmation
+        );
+        assert_eq!(ExtraServiceType::Insurance.to_string(), "INSURANCE");
+        assert_eq!(
+            ExtraServiceType::CertifiedMail.to_string(),
+            "CERTIFIED_MAIL"
+        );
+    }
+
+    #[test]
+    fn extra_services_rate_response_deserialization() {
+        let json = r#"{
+            "extraServices": [
+                {
+                    "name": "Insurance",
+                    "serviceId": "100",
+                    "price": 4.20,
+                    "description": "Coverage up to $300.00"
+                },
+                {
+                    "name": "Signature Confirmation",
+                    "serviceId": "108",
+                    "price": 3.65,
+                    "description": "Recipient signature required"
+                }
+            ],
+            "warnings": []
+        }"#;
+
+        let res: ExtraServicesRateResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(res.extra_services.len(), 2);
+        assert_eq!(res.extra_services[0].name, "Insurance");
+        assert_eq!(res.extra_services[0].price, 4.20);
+        assert_eq!(res.extra_services[0].service_id.as_deref(), Some("100"));
+        assert_eq!(res.extra_services[1].name, "Signature Confirmation");
+        assert_eq!(res.extra_services[1].price, 3.65);
     }
 }
