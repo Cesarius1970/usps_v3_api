@@ -39,6 +39,8 @@
 //!   por código postal o geocordenadas, consulta de horarios semanales y servicios (pasaportes, casilleros).
 //! - **Servicio de Webhooks (`Subscriptions v3`):** Registro, consulta y cancelación de callbacks HTTP en tiempo real
 //!   para eventos de rastreo y entrega (`POST /subscriptions/v3/subscription`, `DELETE /subscriptions/v3/subscription/{id}`).
+//! - **Servicio de Pagos EPS (`Payments v3`):** Consulta de saldos y autorizaciones en el Enterprise Payment System de USPS.
+//! - **Declaraciones Aduaneras (`Customs v3`):** Modelado de formularios CN22 y CP72, partidas arancelarias HTS y exenciones AES/ITN.
 //! - **Resiliencia y Reintentos:** Política de backoff exponencial con jitter ([`RetryPolicy`]) ante respuestas transitorias
 //!   HTTP 429 (Rate Limit), 500, 502, 503 y 504.
 //! - **Manejo Exhaustivo de Errores:** Jerarquía fuertemente tipada con [`UspsError`] y deserialización
@@ -88,19 +90,21 @@ pub use core::{
 
 // Re-exportaciones públicas del catálogo de servicios
 pub use services::{
-    AddressResponse, AddressStandardizationRequest, AddressesService, CancelLabelResponse,
-    CancelPickupResponse, CityStateResponse, CreateLabelRequest, CreateLabelResponse,
-    CreateManifestRequest, CreateManifestResponse, CreateSubscriptionRequest, DailyHours,
-    DeleteSubscriptionResponse, DomesticRateRequest, DomesticRateResponse, ImageInfo,
-    InternationalMailClass, InternationalRateRequest, InternationalRateResponse, LabelImageType,
-    LabelPartyAddress, LabelSize, LabelsService, LocationFacility, LocationSearchRequest,
-    LocationSearchResponse, LocationServiceType, LocationsService, MailClass, ManifestsService,
-    PackageDescription, PackageLocation, PickupAvailabilityResponse, PickupContactAddress,
-    PickupPackageCount, PickupService, PricesService, ProcessingCategory, RateItem,
-    SchedulePickupRequest, SchedulePickupResponse, ServiceStandardEstimate, ServiceStandardRequest,
-    ServiceStandardResponse, ServiceStandardsService, StandardizedAddress, SubscriptionEventType,
-    SubscriptionResponse, TrackingEvent, TrackingExpand, TrackingResponse, TrackingService,
-    WebhooksService, ZipCodeLookupRequest,
+    AccountBalanceResponse, AddressResponse, AddressStandardizationRequest, AddressesService,
+    CancelLabelResponse, CancelPickupResponse, CityStateResponse, CreateLabelRequest,
+    CreateLabelResponse, CreateManifestRequest, CreateManifestResponse, CreateSubscriptionRequest,
+    CustomsContentType, CustomsDeclaration, CustomsItem, DailyHours, DeleteSubscriptionResponse,
+    DomesticRateRequest, DomesticRateResponse, ImageInfo, InternationalMailClass,
+    InternationalRateRequest, InternationalRateResponse, LabelImageType, LabelPartyAddress,
+    LabelSize, LabelsService, LocationFacility, LocationSearchRequest, LocationSearchResponse,
+    LocationServiceType, LocationsService, MailClass, ManifestsService, NonDeliveryOption,
+    PackageDescription, PackageLocation, PaymentAccountType, PaymentAuthorizationRequest,
+    PaymentAuthorizationResponse, PaymentsService, PickupAvailabilityResponse,
+    PickupContactAddress, PickupPackageCount, PickupService, PricesService, ProcessingCategory,
+    RateItem, SchedulePickupRequest, SchedulePickupResponse, ServiceStandardEstimate,
+    ServiceStandardRequest, ServiceStandardResponse, ServiceStandardsService, StandardizedAddress,
+    SubscriptionEventType, SubscriptionResponse, TrackingEvent, TrackingExpand, TrackingResponse,
+    TrackingService, WebhooksService, ZipCodeLookupRequest,
 };
 
 // Módulos públicos canónicos para acceso granular
@@ -110,9 +114,11 @@ pub use core::config;
 pub use core::error;
 pub use core::retry;
 pub use services::addresses;
+pub use services::customs;
 pub use services::labels;
 pub use services::locations;
 pub use services::manifests;
+pub use services::payments;
 pub use services::pickup;
 pub use services::prices;
 pub use services::standards;

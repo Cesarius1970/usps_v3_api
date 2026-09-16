@@ -344,3 +344,38 @@ Se ejecutó la siguiente fase del plan de desarrollo, consolidando el soporte pa
    - Verificación de formato (`cargo fmt --check`) y análisis de lints estricto (`cargo clippy --all-targets --all-features -- -D warnings` con 0 advertencias).
    - Actualización del Manual Técnico `docs/MANUAL_TECNICO.md` y bitácora histórica.
    - Generación de commit bajo estándar Conventional Commits (`feat(sdk): add Service Standards v3, batch tracking, examples, and bump to v0.2.0`).
+
+---
+
+## Interacción #12
+
+### Solicitud del Usuario
+```text
+Continuar con las siguientes fases del desarrollo segun el plan
+```
+
+### Respuesta del Agente
+Se continuó con la siguiente fase avanzada del desarrollo del SDK, completando la cobertura de servicios corporativos e internacionales de la API REST v3 de USPS con la integración de pagos empresariales y declaraciones de aduana:
+
+1. **Servicio de Pagos y Cuentas EPS (`src/services/payments.rs` - `Payments v3`):**
+   - Implementación de [`PaymentsService`] para la interacción con el Enterprise Payment System (EPS) de USPS.
+   - Consulta de saldos disponibles, montos retenidos y estados operativos de cuentas EPS (`AccountBalanceResponse`, método `get_account_balance`).
+   - Gestión de solicitudes de autorización y reserva de fondos (`PaymentAuthorizationRequest`, `PaymentAuthorizationResponse`, método `authorize_payment`).
+   - Soporte para instrumentos de pago [`PaymentAccountType`]: `EPS`, `PERMIT_IMPRINT`, `POSTAGE_METER` y `OMAS`.
+   - Accesible desde el cliente SDK mediante `client.payments()`.
+
+2. **Módulo de Declaraciones de Aduana Internacional (`src/services/customs.rs` - `Customs v3`):**
+   - Modelado de declaraciones para formularios aduaneros oficiales CN22 y CP72 (**PS Form 2976 / 2976-A**).
+   - Estructuración de artículos individuales [`CustomsItem`] con descripciones comerciales, cantidades, pesos, valores y partidas arancelarias HTS (Harmonized Tariff Schedule).
+   - Agregador [`CustomsDeclaration`] con clasificación de contenidos [`CustomsContentType`] (`Merchandise`, `Gift`, `Documents`, `Sample`, etc.), opciones ante imposibilidad de entrega [`NonDeliveryOption`] (`Return`, `Abandon`), identificadores fiscales (IOSS/VAT) y exenciones aduaneras AES/ITN (ej. `NOEEI 30.37(a)`).
+   - Métodos utilitarios de cálculo automático: `total_declared_value()` y `total_weight_lbs()`.
+
+3. **Ampliación de Pruebas Unitarias y de Integración:**
+   - Pruebas unitarias de serialización/deserialización, constructores y agregaciones en `payments.rs` y `customs.rs`.
+   - Integración en `tests/integration_tests.rs` validando rechazo preventivo ante cuentas vacías o montos de débito menores o iguales a cero.
+   - Suite total expandida a **44 pruebas automáticas (40 unitarias + 4 de integración) y 1 doctest**, todas superadas al 100%.
+
+4. **Calidad de Código y Documentación:**
+   - Verificación de formato (`cargo fmt --check`) y análisis estricto de linter (`cargo clippy --all-targets --all-features -- -D warnings` con 0 advertencias).
+   - Actualización del Manual Técnico `docs/MANUAL_TECNICO.md` y bitácora histórica.
+   - Generación de commit bajo estándar Conventional Commits (`feat(sdk): add Payments v3 (EPS) and Customs v3 international declarations`).

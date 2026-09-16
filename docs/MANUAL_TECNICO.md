@@ -113,9 +113,11 @@ usps_v3_api/
     └── services/               # CAPA DE SERVICIOS (Dominios de Negocio USPS v3)
         ├── mod.rs              # Re-exportaciones públicas del catálogo de servicios
         ├── addresses.rs        # Módulo de Direcciones v3 (Addresses v3)
+        ├── customs.rs          # Módulo de Declaraciones de Aduana Internacionales (Customs v3)
         ├── labels.rs           # Módulo de Etiquetas Postales v3 (Labels v3)
         ├── locations.rs        # Módulo de Ubicaciones e Instalaciones v3 (Locations v3)
         ├── manifests.rs        # Módulo de Manifiestos SCAN Form v3 (Manifests v3)
+        ├── payments.rs         # Módulo de Pagos y Cuentas EPS v3 (Payments v3)
         ├── pickup.rs           # Módulo de Recolección de Paquetes v3 (Pickup v3)
         ├── prices.rs           # Módulo de Precios y Tarifas Nacionales/Internacionales (Prices v3)
         ├── standards.rs        # Módulo de Estándares de Servicio y Tránsito v3 (Service Standards v3)
@@ -171,6 +173,7 @@ usps_v3_api/
   - `client.labels()` -> `LabelsService`
   - `client.locations()` -> `LocationsService`
   - `client.manifests()` -> `ManifestsService`
+  - `client.payments()` -> `PaymentsService`
   - `client.pickup()` -> `PickupService`
   - `client.service_standards()` -> `ServiceStandardsService`
   - `client.webhooks()` -> `WebhooksService`
@@ -249,6 +252,19 @@ usps_v3_api/
 - **Servicios:**
   - `get_estimates(&ServiceStandardRequest) -> Result<ServiceStandardResponse>`: Consulta `GET /service-standards/v3/estimates`. Requiere códigos postales de 5 dígitos de origen y destino, fecha de depósito opcional y filtro por clase postal. Retorna la lista de compromisos (`ServiceStandardEstimate`) con fecha programada, días de tránsito y hora límite de depósito.
 
+#### 4.2.10. Módulo de Pagos y Cuentas EPS (`src/services/payments.rs`)
+- **Propósito:** Verificación de saldos y autorizaciones de pago en el Sistema de Pago Empresarial (**Enterprise Payment System - EPS**) de USPS.
+- **Servicios:**
+  - `get_account_balance(account_id) -> Result<AccountBalanceResponse>`: Consulta `GET /payments/v3/payment-accounts/{accountId}/balance`. Retorna el saldo disponible, monto en retención y estado de la cuenta EPS.
+  - `authorize_payment(&PaymentAuthorizationRequest) -> Result<PaymentAuthorizationResponse>`: Despacha `POST /payments/v3/payment-authorization` para reservar fondos sobre cuentas `Eps`, `PermitImprint`, `PostageMeter` u `Omas`.
+
+#### 4.2.11. Módulo de Aduana Internacional (`src/services/customs.rs`)
+- **Propósito:** Modelado estructurado y validación de declaraciones aduaneras para exportación internacional (**PS Form 2976 / 2976-A, CN22, CP72**).
+- **Tipos y Capacidades:**
+  - `CustomsDeclaration`: Declaración agregada con tipo de contenido (`CustomsContentType`: `Merchandise`, `Gift`, `Documents`, etc.), opción de no entrega (`NonDeliveryOption`: `Return`, `Abandon`), exenciones AES/ITN (ej. `NOEEI 30.37(a)`) e identificación fiscal/IOSS.
+  - `CustomsItem`: Artículos individuales con descripción, cantidad, valor en USD, peso en libras, código arancelario HTS y país de origen ISO de 2 letras.
+  - Métodos de agregación: `total_declared_value()` y `total_weight_lbs()`.
+
 ---
 
 ## 5. Guía de Compilación, Pruebas y Calidad
@@ -259,7 +275,7 @@ El proyecto se valida de extremo a extremo mediante el conjunto de herramientas 
 # Compilar todo el SDK
 cargo build
 
-# Ejecutar las 38 pruebas (35 unitarias + 3 de integración) y doctests interactivos
+# Ejecutar las 44 pruebas (40 unitarias + 4 de integración) y doctests interactivos
 cargo test --all-targets --all-features
 
 # Verificar cumplimiento de formato oficial con rustfmt
@@ -304,16 +320,18 @@ Cada vez que se extienda el SDK:
   - Servicios v3: Direcciones, Tracking individual, Tarifas nacionales e internacionales, Etiquetas postales, Recolección a domicilio y Ubicaciones de oficinas.
   - Batería de 25 pruebas unitarias.
 
-### Versión 0.2.0 (Resiliencia, Estándares de Entrega y Automatización)
+### Versión 0.2.0 (Resiliencia, Estándares de Entrega, Pagos EPS, Aduana y CI/CD)
 - **Fecha:** 2026-09-15
 - **Git Branch:** `main`
 - **Novedades de la Versión:**
   - **Nueva Resiliencia:** `RetryPolicy` con backoff exponencial y jitter determinístico ante códigos transitorios HTTP 429, 500, 502, 503 y 504 en `UspsClient`.
   - **Nuevo Servicio:** `ServiceStandardsService` (`service-standards/v3`) para cálculo de fechas estimadas de entrega (EDD) y tiempos de tránsito origen-destino.
+  - **Nuevo Servicio:** `PaymentsService` (`payments/v3`) para consulta de saldos EPS y autorizaciones de pago.
+  - **Nuevo Módulo de Aduanas:** `CustomsDeclaration` y `CustomsItem` (`customs/v3`) para envíos internacionales con formularios CN22/CP72.
   - **Nuevo Servicio:** `ManifestsService` (`manifests/v3`) para generación de formularios SCAN Form (PS Form 5630).
   - **Nuevo Servicio:** `WebhooksService` (`subscriptions/v3`) para suscripción a notificaciones en tiempo real.
   - **Rastreo por Lotes:** Método `track_batch` en `TrackingService` para hasta 35 envíos simultáneos.
   - **Suite de Pruebas de Integración:** Archivo `tests/integration_tests.rs` con validación de APIs públicas, concurrencia en Tokio y validaciones preventivas de entrada.
   - **Ejemplos Prácticos:** Directorio `examples/` con `quickstart.rs` y `shipping_workflow.rs`.
   - **Pipeline CI/CD:** Flujo de trabajo en `.github/workflows/ci.yml`.
-  - Cobertura expandida a **38 pruebas automáticas y 1 doctest** con 100% de aprobación y 0 advertencias de Clippy.
+  - Cobertura expandida a **44 pruebas automáticas y 1 doctest** con 100% de aprobación y 0 advertencias de Clippy.

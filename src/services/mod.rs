@@ -9,9 +9,11 @@
 //! Catálogo de servicios de la API REST v3 de USPS.
 
 pub mod addresses;
+pub mod customs;
 pub mod labels;
 pub mod locations;
 pub mod manifests;
+pub mod payments;
 pub mod pickup;
 pub mod prices;
 pub mod standards;
@@ -22,6 +24,7 @@ pub use addresses::{
     AddressResponse, AddressStandardizationRequest, AddressesService, CityStateResponse,
     StandardizedAddress, ZipCodeLookupRequest,
 };
+pub use customs::{CustomsContentType, CustomsDeclaration, CustomsItem, NonDeliveryOption};
 pub use labels::{
     CancelLabelResponse, CreateLabelRequest, CreateLabelResponse, ImageInfo, LabelImageType,
     LabelPartyAddress, LabelSize, LabelsService, PackageDescription,
@@ -31,6 +34,10 @@ pub use locations::{
     LocationServiceType, LocationsService,
 };
 pub use manifests::{CreateManifestRequest, CreateManifestResponse, ManifestsService};
+pub use payments::{
+    AccountBalanceResponse, PaymentAccountType, PaymentAuthorizationRequest,
+    PaymentAuthorizationResponse, PaymentsService,
+};
 pub use pickup::{
     CancelPickupResponse, PackageLocation, PickupAvailabilityResponse, PickupContactAddress,
     PickupPackageCount, PickupService, SchedulePickupRequest, SchedulePickupResponse,

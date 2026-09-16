@@ -127,4 +127,40 @@ async fn invalid_inputs_should_fail_before_network_dispatch() {
     );
     let err = client.webhooks().subscribe(&webhook_req).await.unwrap_err();
     assert!(matches!(err, UspsError::InvalidInput(_)));
+
+    // 9. Pagos EPS: Account ID vacío
+    let err = client
+        .payments()
+        .get_account_balance("   ")
+        .await
+        .unwrap_err();
+    assert!(matches!(err, UspsError::InvalidInput(_)));
+
+    // 10. Pagos EPS: Monto inválido
+    let pay_req = PaymentAuthorizationRequest::new("EPS-12345", 0.0, PaymentAccountType::Eps);
+    let err = client
+        .payments()
+        .authorize_payment(&pay_req)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, UspsError::InvalidInput(_)));
+}
+
+#[test]
+fn customs_declaration_aggregation_test() {
+    let item1 = CustomsItem::new("T-Shirt", 2, 15.0, 0.8, "US").hs_tariff_number("6109.10");
+    let item2 = CustomsItem::new("Baseball Cap", 1, 25.0, 0.4, "US").hs_tariff_number("6505.00");
+
+    let decl = CustomsDeclaration::new(
+        CustomsContentType::Merchandise,
+        NonDeliveryOption::Return,
+        vec![item1, item2],
+    )
+    .aes_itn("NOEEI 30.37(a)");
+
+    assert_eq!(decl.items.len(), 2);
+    // (2 * 15) + (1 * 25) = 55.0
+    assert_eq!(decl.total_declared_value(), 55.0);
+    // 0.8 + 0.4 = 1.2
+    assert!((decl.total_weight_lbs() - 1.2).abs() < 1e-6);
 }
