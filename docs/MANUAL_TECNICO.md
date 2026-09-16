@@ -3,7 +3,7 @@
 ## 1. Identificación y Copyright
 
 - **Nombre del Proyecto:** `usps_v3_api`
-- **Descripción:** Cliente SDK asíncrono, fuertemente tipado e idiomático para la API REST v3 de USPS (United States Postal Service) implementado en Rust.
+- **Descripción:** Cliente SDK asíncrono, fuertemente tipado e idiomático para el ecosistema completo de APIs REST v3 de USPS (United States Postal Service) implementado en Rust.
 - **Autor y Titular de Derechos de Autor:** César A Vergara Buenaventura (`cesarvergarab@gmail.com`).
 - **Copyright:** Copyright (c) 2026 César A Vergara Buenaventura. Todos los derechos reservados.
 - **Licenciamiento:** Doble licencia estándar del ecosistema oficial de Rust:
@@ -25,7 +25,7 @@ Se sigue el flujo estándar de Git estructurado por prefijos en minúsculas sepa
 
 - `main`: Rama principal de producción / releases estables.
 - `develop`: Rama de integración de desarrollo continuo (cuando aplique).
-- `feature/<nombre-descriptivo>`: Nuevas funcionalidades o módulos de la API USPS (ej. `feature/oauth2-client`, `feature/tracking-service`).
+- `feature/<nombre-descriptivo>`: Nuevas funcionalidades o módulos de la API USPS (ej. `feature/oauth2-client`, `feature/tracking-service`, `feature/prices-v3`, `feature/labels-v3`, `feature/pickup-v3`).
 - `bugfix/<nombre-descriptivo>`: Correcciones de errores o bugs.
 - `hotfix/<nombre-descriptivo>`: Correcciones urgentes y directas sobre releases.
 - `docs/<nombre-descriptivo>`: Cambios exclusivamente dedicados a documentación técnica o bitácoras.
@@ -95,7 +95,10 @@ usps_v3_api/
     ├── client.rs               # Cliente central UspsClient y UspsClientBuilder
     ├── config.rs               # Configuración, entornos y saneamiento de secretos
     ├── error.rs                # Jerarquía de errores UspsError y deserialización API
+    ├── labels.rs               # Módulo de Etiquetas Postales v3 (Labels v3)
     ├── lib.rs                  # Raíz de la biblioteca y re-exportaciones públicas
+    ├── pickup.rs               # Módulo de Recolección de Paquetes v3 (Pickup v3)
+    ├── prices.rs               # Módulo de Precios y Tarifas v3 (Prices v3)
     └── tracking.rs             # Módulo de Seguimiento de Envíos v3 (Tracking v3)
 ```
 
@@ -134,9 +137,12 @@ usps_v3_api/
   `UspsClient` encapsula un `Arc<UspsClientInner>`, permitiendo su clonación a costo insignificante (incremento de puntero atómico) para distribuirlo entre múltiples hilos o tareas concurrentes de Tokio.
 - **Patrón Builder (`UspsClientBuilder`):**
   Permite configuración fluida de credenciales, timeout y entorno con validación previa de datos obligatorios.
-- **Métodos Despachadores Genéricos:**
-  - `get_with_query<Q, T>(&self, endpoint, query)`: Inyecta automáticamente la cabecera `Authorization: Bearer <token>`, aplica serialización de query parameters y deserializa el tipo `T`.
-  - `post_json<B, T>(&self, endpoint, body)`: Despacha cuerpos JSON autenticados.
+- **Servicios Integrados:**
+  - `client.addresses()` -> `AddressesService`
+  - `client.tracking()` -> `TrackingService`
+  - `client.prices()` -> `PricesService`
+  - `client.labels()` -> `LabelsService`
+  - `client.pickup()` -> `PickupService`
 
 ### 4.5. Módulo de Direcciones (`src/addresses.rs`)
 - **Propósito:** Normalizar y validar direcciones postales en Estados Unidos según la base de datos de USPS.
@@ -148,9 +154,31 @@ usps_v3_api/
 ### 4.6. Módulo de Seguimiento (`src/tracking.rs`)
 - **Propósito:** Seguimiento de envíos postales en tiempo real.
 - **Servicios:**
-  - `track(tracking_number) -> Result<TrackingResponse>`: Consulta detallada de la línea de tiempo completa del paquete.
+  - `track(tracking_number) -> Result<TrackingResponse>`: Consulta detallada de la línea de tiempo completa del paquete (`TrackingExpand::Detail`).
   - `track_with_expand(tracking_number, TrackingExpand) -> Result<TrackingResponse>`: Permite seleccionar entre historial detallado (`TrackingExpand::Detail`) o resumen del estado actual (`TrackingExpand::Summary`).
-  - Validación de caracteres antes de invocar la red para evitar inyecciones o rutas URL malformadas.
+
+### 4.7. Módulo de Precios y Tarifas (`src/prices.rs`)
+- **Propósito:** Cálculo y cotización de tarifas de franqueo para envíos nacionales.
+- **Servicios:**
+  - `calculate_domestic_rates(&DomesticRateRequest) -> Result<DomesticRateResponse>`: Despacha `POST /prices/v3/base-rates/search`.
+  - Soporte de clases de correo (`MailClass`): `PriorityMail`, `PriorityMailExpress`, `UspsGroundAdvantage`, `MediaMail`, `LibraryMail`, `FirstClassMail`.
+  - Soporte de categorías de procesamiento (`ProcessingCategory`): `Letters`, `Flats`, `Machinable`, `NonMachinable`.
+  - Validación de peso positivo y códigos postales válidos de 5 dígitos.
+
+### 4.8. Módulo de Etiquetas Postales (`src/labels.rs`)
+- **Propósito:** Generación, emisión y cancelación de etiquetas postales con código de barras USPS.
+- **Servicios:**
+  - `create_label(&CreateLabelRequest) -> Result<CreateLabelResponse>`: Despacha `POST /labels/v3/label`.
+  - Formatos gráficos soportados (`LabelImageType`): `PDF`, `PNG`, `TIFF`, `SVG` y entrega de imagen en Base64 o URL directa temporal.
+  - Modelos de dirección estructurada de remitente (`from_address`) y destinatario (`to_address`).
+  - `cancel_label(label_id) -> Result<CancelLabelResponse>`: Despacha `DELETE /labels/v3/label/{labelId}` para anular etiquetas y tramitar reembolsos de franqueo.
+
+### 4.9. Módulo de Recolección de Paquetes (`src/pickup.rs`)
+- **Propósito:** Gestión integral de recolección de paquetes por el cartero a domicilio (`Carrier Pickup`).
+- **Servicios:**
+  - `check_availability(zip_code) -> Result<PickupAvailabilityResponse>`: Consulta `GET /pickup/v3/carrier-pickup/availability?ZIPCode={zip_code}`.
+  - `schedule(&SchedulePickupRequest) -> Result<SchedulePickupResponse>`: Despacha `POST /pickup/v3/carrier-pickup`. Permite designar ubicación (`PackageLocation`: `FrontDoor`, `BackDoor`, `InMailbox`, etc.) y conteo de paquetes por clase (`PickupPackageCount`).
+  - `cancel(confirmation_number) -> Result<CancelPickupResponse>`: Despacha `DELETE /pickup/v3/carrier-pickup/{confirmationNumber}`.
 
 ---
 
@@ -162,7 +190,7 @@ El proyecto se valida de extremo a extremo mediante el conjunto de herramientas 
 # Compilar todo el SDK
 cargo build
 
-# Ejecutar las 13 pruebas unitarias y doctests interactivos
+# Ejecutar las 21 pruebas unitarias y doctests interactivos
 cargo test
 
 # Verificar cumplimiento de formato oficial con rustfmt
@@ -179,8 +207,8 @@ cargo doc --no-deps --open
 
 ## 6. Mantenimiento Continuo
 
-Cada vez que se extienda el SDK (por ejemplo, incorporando los módulos de Tarifas Nacionales / Internacionales `prices/v3` o Generación de Etiquetas `labels/v3`):
-1. Añadir los contratos de datos y endpoints en submódulos dedicados.
-2. Escribir pruebas unitarias de serialización/deserialización de respuestas de prueba.
-3. Actualizar la sección 4 de este documento.
-4. Generar el commit correspondiente en Git bajo la convención establecida.
+Cada vez que se extienda el SDK:
+1. Añadir los contratos de datos y endpoints en submódulos dedicados en `src/`.
+2. Escribir pruebas unitarias de serialización/deserialización y constructores en `tests`.
+3. Actualizar la sección 4 de este documento con las firmas de API y algoritmos.
+4. Generar el commit correspondiente en Git bajo el estándar **Conventional Commits v1.0.0**.

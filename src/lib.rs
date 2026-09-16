@@ -24,6 +24,12 @@
 //!   búsqueda de códigos postales (ZIP Lookup) y resolución de ciudad/estado.
 //! - **Servicio de Seguimiento (`Tracking v3`):** Consulta de paquetes en tránsito, detalle de eventos históricos,
 //!   estados y fechas estimadas de entrega.
+//! - **Servicio de Precios y Tarifas (`Prices v3`):** Cotización de tarifas postales nacionales (`POST /prices/v3/base-rates/search`)
+//!   por peso, dimensiones y clases postales (`Priority Mail`, `USPS Ground Advantage`, etc.).
+//! - **Servicio de Etiquetas (`Labels v3`):** Emisión y cancelación de etiquetas postales con código de barras en
+//!   formatos PDF, PNG o Base64 (`POST /labels/v3/label`, `DELETE /labels/v3/label/{id}`).
+//! - **Servicio de Recolección (`Pickup v3`):** Verificación de disponibilidad, programación y cancelación de recolección
+//!   de paquetes por cartero a domicilio (`Carrier Pickup`).
 //! - **Manejo Exhaustivo de Errores:** Jerarquía fuertemente tipada con [`UspsError`] y deserialización
 //!   de errores estructurados devueltos por la pasarela de USPS.
 //!
@@ -64,6 +70,9 @@ pub mod auth;
 pub mod client;
 pub mod config;
 pub mod error;
+pub mod labels;
+pub mod pickup;
+pub mod prices;
 pub mod tracking;
 
 // Re-exportaciones públicas principales
@@ -75,4 +84,16 @@ pub use auth::{OAuthTokenResponse, TokenManager};
 pub use client::{UspsClient, UspsClientBuilder};
 pub use config::{USPS_CAT_BASE_URL, USPS_PROD_BASE_URL, UspsConfig, UspsEnvironment};
 pub use error::{ApiErrorDetail, Result, UspsApiErrorResponse, UspsError};
+pub use labels::{
+    CancelLabelResponse, CreateLabelRequest, CreateLabelResponse, ImageInfo, LabelImageType,
+    LabelPartyAddress, LabelSize, LabelsService, PackageDescription,
+};
+pub use pickup::{
+    CancelPickupResponse, PackageLocation, PickupAvailabilityResponse, PickupContactAddress,
+    PickupPackageCount, PickupService, SchedulePickupRequest, SchedulePickupResponse,
+};
+pub use prices::{
+    DomesticRateRequest, DomesticRateResponse, MailClass, PricesService, ProcessingCategory,
+    RateItem,
+};
 pub use tracking::{TrackingEvent, TrackingExpand, TrackingResponse, TrackingService};

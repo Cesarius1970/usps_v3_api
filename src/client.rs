@@ -84,6 +84,24 @@ impl UspsClient {
         TrackingService::new(self.clone())
     }
 
+    /// Retorna el servicio de consulta de precios y tarifas (`Prices v3`).
+    #[must_use]
+    pub fn prices(&self) -> crate::prices::PricesService {
+        crate::prices::PricesService::new(self.clone())
+    }
+
+    /// Retorna el servicio de emisión y anulación de etiquetas postales (`Labels v3`).
+    #[must_use]
+    pub fn labels(&self) -> crate::labels::LabelsService {
+        crate::labels::LabelsService::new(self.clone())
+    }
+
+    /// Retorna el servicio de programación y gestión de recolección de paquetes (`Pickup v3`).
+    #[must_use]
+    pub fn pickup(&self) -> crate::pickup::PickupService {
+        crate::pickup::PickupService::new(self.clone())
+    }
+
     /// Retorna el gestor interno de autenticación para consultar o forzar tokens.
     #[must_use]
     pub fn token_manager(&self) -> &TokenManager {

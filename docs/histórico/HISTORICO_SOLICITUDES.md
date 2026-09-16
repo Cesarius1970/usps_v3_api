@@ -130,3 +130,42 @@ Inicializar y desarrollar una librería cliente SDK en Rust fuertemente tipada y
    - Ejecución de `cargo test`: 13 pruebas unitarias y 1 doctest aprobados (0 fallos).
    - Ejecución de `cargo clippy --all-targets --all-features -- -D warnings`: 0 advertencias.
    - Generación de commit bajo estándar Conventional Commits.
+
+---
+
+## Interacción #6
+
+### Solicitud del Usuario
+```text
+Continua con el resto de fases secuencialmente
+```
+
+### Respuesta del Agente
+Se desarrollaron e integraron secuencialmente los módulos restantes de la suite oficial USPS v3 REST API:
+
+1. **Fase 2: Precios y Tarifas Nacionales (`src/prices.rs` - `Prices v3`):**
+   - Modelado de solicitud `DomesticRateRequest` con soporte de dimensiones, clases postales (`MailClass`: Priority Mail, Ground Advantage, Priority Mail Express, etc.) y categorías de procesamiento (`ProcessingCategory`).
+   - Implementación de `PricesService::calculate_domestic_rates` (`POST /prices/v3/base-rates/search`).
+   - Parseo tipado de respuestas con `DomesticRateResponse` y `RateItem`.
+
+2. **Fase 3: Emisión y Cancelación de Etiquetas Postales (`src/labels.rs` - `Labels v3`):**
+   - Modelado exhaustivo de solicitud `CreateLabelRequest`, `LabelPartyAddress` (remitente/destinatario) y `PackageDescription`.
+   - Soporte de formatos gráficos `LabelImageType` (`PDF`, `PNG`, `TIFF`, `SVG`) y tamaños térmicos (`4X6`, `4X4`).
+   - Implementación de `LabelsService::create_label` (`POST /labels/v3/label`) para generación con imagen Base64 y código de barras.
+   - Implementación de `LabelsService::cancel_label` (`DELETE /labels/v3/label/{labelId}`) para anulación y reembolso de etiquetas.
+
+3. **Fase 4: Recolección de Paquetes en Domicilio (`src/pickup.rs` - `Package Pickup v3`):**
+   - Consulta de disponibilidad geográfica de recolección: `PickupService::check_availability` (`GET /pickup/v3/carrier-pickup/availability`).
+   - Programación de visita del cartero: `PickupService::schedule` (`POST /pickup/v3/carrier-pickup`) con especificación de ubicación (`PackageLocation`) y conteo discriminado de paquetes (`PickupPackageCount`).
+   - Cancelación de recolección programada: `PickupService::cancel` (`DELETE /pickup/v3/carrier-pickup/{confirmationNumber}`).
+
+4. **Integración en Cliente Central y API Pública:**
+   - Métodos agregados en `UspsClient`: `.prices()`, `.labels()` y `.pickup()`.
+   - Actualización de `src/lib.rs` con re-exportaciones de alto nivel y documentación de características.
+
+5. **Documentación Viva y Verificación Integral:**
+   - Actualización completa de `docs/MANUAL_TECNICO.md` con los nuevos módulos, algoritmos y contratos de servicio.
+   - Ejecución de `cargo fmt --check`: Cumplimiento 100% con `rustfmt`.
+   - Ejecución de `cargo test`: 21 pruebas unitarias y 1 doctest aprobados (0 fallos).
+   - Ejecución de `cargo clippy --all-targets --all-features -- -D warnings`: 0 advertencias.
+   - Generación de commit en Git bajo la convención establecida.
