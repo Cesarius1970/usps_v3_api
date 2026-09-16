@@ -102,6 +102,12 @@ impl UspsClient {
         crate::pickup::PickupService::new(self.clone())
     }
 
+    /// Retorna el servicio de búsqueda y consulta de instalaciones y oficinas postales (`Locations v3`).
+    #[must_use]
+    pub fn locations(&self) -> crate::locations::LocationsService {
+        crate::locations::LocationsService::new(self.clone())
+    }
+
     /// Retorna el gestor interno de autenticación para consultar o forzar tokens.
     #[must_use]
     pub fn token_manager(&self) -> &TokenManager {

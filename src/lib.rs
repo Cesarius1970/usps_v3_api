@@ -30,6 +30,8 @@
 //!   formatos PDF, PNG o Base64 (`POST /labels/v3/label`, `DELETE /labels/v3/label/{id}`).
 //! - **Servicio de Recolección (`Pickup v3`):** Verificación de disponibilidad, programación y cancelación de recolección
 //!   de paquetes por cartero a domicilio (`Carrier Pickup`).
+//! - **Servicio de Ubicaciones (`Locations v3`):** Búsqueda de oficinas postales, buzones de depósito y quioscos
+//!   por código postal o geocordenadas, consulta de horarios semanales y servicios (pasaportes, casilleros).
 //! - **Manejo Exhaustivo de Errores:** Jerarquía fuertemente tipada con [`UspsError`] y deserialización
 //!   de errores estructurados devueltos por la pasarela de USPS.
 //!
@@ -71,6 +73,7 @@ pub mod client;
 pub mod config;
 pub mod error;
 pub mod labels;
+pub mod locations;
 pub mod pickup;
 pub mod prices;
 pub mod tracking;
@@ -88,12 +91,16 @@ pub use labels::{
     CancelLabelResponse, CreateLabelRequest, CreateLabelResponse, ImageInfo, LabelImageType,
     LabelPartyAddress, LabelSize, LabelsService, PackageDescription,
 };
+pub use locations::{
+    DailyHours, LocationFacility, LocationSearchRequest, LocationSearchResponse,
+    LocationServiceType, LocationsService,
+};
 pub use pickup::{
     CancelPickupResponse, PackageLocation, PickupAvailabilityResponse, PickupContactAddress,
     PickupPackageCount, PickupService, SchedulePickupRequest, SchedulePickupResponse,
 };
 pub use prices::{
-    DomesticRateRequest, DomesticRateResponse, MailClass, PricesService, ProcessingCategory,
-    RateItem,
+    DomesticRateRequest, DomesticRateResponse, InternationalMailClass, InternationalRateRequest,
+    InternationalRateResponse, MailClass, PricesService, ProcessingCategory, RateItem,
 };
 pub use tracking::{TrackingEvent, TrackingExpand, TrackingResponse, TrackingService};

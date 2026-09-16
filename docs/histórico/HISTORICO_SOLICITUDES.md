@@ -169,3 +169,37 @@ Se desarrollaron e integraron secuencialmente los módulos restantes de la suite
    - Ejecución de `cargo test`: 21 pruebas unitarias y 1 doctest aprobados (0 fallos).
    - Ejecución de `cargo clippy --all-targets --all-features -- -D warnings`: 0 advertencias.
    - Generación de commit en Git bajo la convención establecida.
+
+---
+
+## Interacción #7
+
+### Solicitud del Usuario
+```text
+Continua con el resto de fases secuencialmente
+```
+
+### Respuesta del Agente
+Se desarrollaron e integraron secuencialmente las capacidades avanzadas de cobertura internacional e infraestructura física de USPS:
+
+1. **Fase 5: Ubicaciones e Instalaciones Físicas (`src/locations.rs` - `Locations v3`):**
+   - Búsqueda geográfica por código postal de 5 dígitos o por coordenadas de latitud/longitud con radio en millas (`LocationSearchRequest`).
+   - Filtrado por tipos de servicio especializado (`LocationServiceType`: pasaportes, apartados postales, quioscos automáticos, etc.).
+   - Modelado de horarios de atención semanales (`DailyHours`) y ficha completa de la instalación (`LocationFacility`).
+   - Métodos de servicio: `LocationsService::search` y `LocationsService::get_details`.
+
+2. **Fase 6: Tarifas y Precios Internacionales (`src/prices.rs` - `International Rates v3`):**
+   - Modelado de solicitud `InternationalRateRequest` con soporte de país de destino (código ISO de 2 letras), código postal foráneo, peso y dimensiones.
+   - Clases de servicio internacional (`InternationalMailClass`: Global Express Guaranteed, Priority Mail Express International, Priority Mail International, First-Class Package International).
+   - Implementación del método `PricesService::calculate_international_rates` (`POST /prices/v3/international-base-rates/search`).
+
+3. **Integración en Cliente Central y API Pública:**
+   - Método `.locations()` expuesto en `UspsClient`.
+   - Re-exportación de todos los tipos y servicios nuevos en `src/lib.rs`.
+
+4. **Documentación Técnica y Verificación de Calidad:**
+   - Actualización de `docs/MANUAL_TECNICO.md` reflejando la cobertura completa del ecosistema.
+   - Ejecución de `cargo fmt --check`: 100% compliant.
+   - Ejecución de `cargo test`: 25 pruebas unitarias y 1 doctest aprobados (0 fallos).
+   - Ejecución de `cargo clippy --all-targets --all-features -- -D warnings`: 0 advertencias.
+   - Generación de commit en Git bajo la convención establecida.

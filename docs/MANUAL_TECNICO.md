@@ -25,7 +25,7 @@ Se sigue el flujo estándar de Git estructurado por prefijos en minúsculas sepa
 
 - `main`: Rama principal de producción / releases estables.
 - `develop`: Rama de integración de desarrollo continuo (cuando aplique).
-- `feature/<nombre-descriptivo>`: Nuevas funcionalidades o módulos de la API USPS (ej. `feature/oauth2-client`, `feature/tracking-service`, `feature/prices-v3`, `feature/labels-v3`, `feature/pickup-v3`).
+- `feature/<nombre-descriptivo>`: Nuevas funcionalidades o módulos de la API USPS (ej. `feature/oauth2-client`, `feature/tracking-service`, `feature/prices-v3`, `feature/labels-v3`, `feature/pickup-v3`, `feature/locations-v3`).
 - `bugfix/<nombre-descriptivo>`: Correcciones de errores o bugs.
 - `hotfix/<nombre-descriptivo>`: Correcciones urgentes y directas sobre releases.
 - `docs/<nombre-descriptivo>`: Cambios exclusivamente dedicados a documentación técnica o bitácoras.
@@ -97,8 +97,9 @@ usps_v3_api/
     ├── error.rs                # Jerarquía de errores UspsError y deserialización API
     ├── labels.rs               # Módulo de Etiquetas Postales v3 (Labels v3)
     ├── lib.rs                  # Raíz de la biblioteca y re-exportaciones públicas
+    ├── locations.rs            # Módulo de Ubicaciones e Instalaciones v3 (Locations v3)
     ├── pickup.rs               # Módulo de Recolección de Paquetes v3 (Pickup v3)
-    ├── prices.rs               # Módulo de Precios y Tarifas v3 (Prices v3)
+    ├── prices.rs               # Módulo de Precios y Tarifas Nacionales/Internacionales (Prices v3)
     └── tracking.rs             # Módulo de Seguimiento de Envíos v3 (Tracking v3)
 ```
 
@@ -143,6 +144,7 @@ usps_v3_api/
   - `client.prices()` -> `PricesService`
   - `client.labels()` -> `LabelsService`
   - `client.pickup()` -> `PickupService`
+  - `client.locations()` -> `LocationsService`
 
 ### 4.5. Módulo de Direcciones (`src/addresses.rs`)
 - **Propósito:** Normalizar y validar direcciones postales en Estados Unidos según la base de datos de USPS.
@@ -158,19 +160,15 @@ usps_v3_api/
   - `track_with_expand(tracking_number, TrackingExpand) -> Result<TrackingResponse>`: Permite seleccionar entre historial detallado (`TrackingExpand::Detail`) o resumen del estado actual (`TrackingExpand::Summary`).
 
 ### 4.7. Módulo de Precios y Tarifas (`src/prices.rs`)
-- **Propósito:** Cálculo y cotización de tarifas de franqueo para envíos nacionales.
+- **Propósito:** Cálculo y cotización de tarifas de franqueo para envíos nacionales e internacionales.
 - **Servicios:**
-  - `calculate_domestic_rates(&DomesticRateRequest) -> Result<DomesticRateResponse>`: Despacha `POST /prices/v3/base-rates/search`.
-  - Soporte de clases de correo (`MailClass`): `PriorityMail`, `PriorityMailExpress`, `UspsGroundAdvantage`, `MediaMail`, `LibraryMail`, `FirstClassMail`.
-  - Soporte de categorías de procesamiento (`ProcessingCategory`): `Letters`, `Flats`, `Machinable`, `NonMachinable`.
-  - Validación de peso positivo y códigos postales válidos de 5 dígitos.
+  - `calculate_domestic_rates(&DomesticRateRequest) -> Result<DomesticRateResponse>`: Despacha `POST /prices/v3/base-rates/search`. Soporta `MailClass` (*Priority Mail, USPS Ground Advantage, Priority Mail Express, etc.*) y `ProcessingCategory`.
+  - `calculate_international_rates(&InternationalRateRequest) -> Result<InternationalRateResponse>`: Despacha `POST /prices/v3/international-base-rates/search`. Valida el código de país de 2 caracteres ISO (ej. `CA`, `GB`, `MX`, `ES`) y soporta `InternationalMailClass` (*Global Express Guaranteed, Priority Mail International, First-Class Package International, etc.*).
 
 ### 4.8. Módulo de Etiquetas Postales (`src/labels.rs`)
 - **Propósito:** Generación, emisión y cancelación de etiquetas postales con código de barras USPS.
 - **Servicios:**
-  - `create_label(&CreateLabelRequest) -> Result<CreateLabelResponse>`: Despacha `POST /labels/v3/label`.
-  - Formatos gráficos soportados (`LabelImageType`): `PDF`, `PNG`, `TIFF`, `SVG` y entrega de imagen en Base64 o URL directa temporal.
-  - Modelos de dirección estructurada de remitente (`from_address`) y destinatario (`to_address`).
+  - `create_label(&CreateLabelRequest) -> Result<CreateLabelResponse>`: Despacha `POST /labels/v3/label`. Soporta formatos gráficos `LabelImageType` (*PDF, PNG, TIFF, SVG*) y entrega de imagen Base64 o URL de descarga directa.
   - `cancel_label(label_id) -> Result<CancelLabelResponse>`: Despacha `DELETE /labels/v3/label/{labelId}` para anular etiquetas y tramitar reembolsos de franqueo.
 
 ### 4.9. Módulo de Recolección de Paquetes (`src/pickup.rs`)
@@ -179,6 +177,12 @@ usps_v3_api/
   - `check_availability(zip_code) -> Result<PickupAvailabilityResponse>`: Consulta `GET /pickup/v3/carrier-pickup/availability?ZIPCode={zip_code}`.
   - `schedule(&SchedulePickupRequest) -> Result<SchedulePickupResponse>`: Despacha `POST /pickup/v3/carrier-pickup`. Permite designar ubicación (`PackageLocation`: `FrontDoor`, `BackDoor`, `InMailbox`, etc.) y conteo de paquetes por clase (`PickupPackageCount`).
   - `cancel(confirmation_number) -> Result<CancelPickupResponse>`: Despacha `DELETE /pickup/v3/carrier-pickup/{confirmationNumber}`.
+
+### 4.10. Módulo de Ubicaciones e Instalaciones (`src/locations.rs`)
+- **Propósito:** Búsqueda y consulta de instalaciones físicas de USPS, buzones de depósito y quioscos automatizados.
+- **Servicios:**
+  - `search(&LocationSearchRequest) -> Result<LocationSearchResponse>`: Consulta `GET /locations/v3/location`. Permite búsqueda por código postal (`from_zip_code`) o coordenadas geográficas (`from_coordinates`), radio en millas y filtrado por servicios (`LocationServiceType`: `PassportAppointments`, `PoBoxes`, `RetailServices`, `CollectionBox`, `SelfServiceKiosks`, etc.).
+  - `get_details(location_id) -> Result<LocationFacility>`: Consulta `GET /locations/v3/location/{locationId}` para obtener datos de contacto, coordenadas precisas, servicios habilitados y horarios semanales detallados (`DailyHours`).
 
 ---
 
@@ -190,7 +194,7 @@ El proyecto se valida de extremo a extremo mediante el conjunto de herramientas 
 # Compilar todo el SDK
 cargo build
 
-# Ejecutar las 21 pruebas unitarias y doctests interactivos
+# Ejecutar las 25 pruebas unitarias y doctests interactivos
 cargo test
 
 # Verificar cumplimiento de formato oficial con rustfmt
