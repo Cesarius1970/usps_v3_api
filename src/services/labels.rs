@@ -275,6 +275,66 @@ pub struct CancelLabelResponse {
     pub message: Option<String>,
 }
 
+/// Solicitud de generación de identificador y código QR de Label Broker (`POST /labels/v3/label-broker`).
+///
+/// Permite que un cliente imprima la etiqueta directamente en una oficina o quiosco de USPS
+/// presentando el código QR desde su dispositivo móvil sin necesidad de contar con impresora.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LabelBrokerRequest {
+    /// Dirección del remitente u origen del envío.
+    pub from_address: LabelPartyAddress,
+    /// Dirección del destinatario de entrega.
+    pub to_address: LabelPartyAddress,
+    /// Especificaciones del bulto y clase de envío.
+    pub package_description: PackageDescription,
+    /// Referencia externa o ID de pedido en el sistema del remitente.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub customer_reference_id: Option<String>,
+}
+
+impl LabelBrokerRequest {
+    /// Construye una nueva solicitud de Label Broker para entrega postal.
+    #[must_use]
+    pub fn new(
+        from_address: LabelPartyAddress,
+        to_address: LabelPartyAddress,
+        package_description: PackageDescription,
+    ) -> Self {
+        Self {
+            from_address,
+            to_address,
+            package_description,
+            customer_reference_id: None,
+        }
+    }
+
+    /// Asigna una referencia de cliente externa (ej. número de orden).
+    #[must_use]
+    pub fn customer_reference_id(mut self, ref_id: impl Into<String>) -> Self {
+        self.customer_reference_id = Some(ref_id.into());
+        self
+    }
+}
+
+/// Respuesta tras registrar una solicitud de Label Broker en USPS.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LabelBrokerResponse {
+    /// Identificador único Label Broker ID para impresión en quiosco o mostrador.
+    pub label_broker_id: String,
+    /// Número de seguimiento USPS asignado al envío.
+    pub tracking_number: String,
+    /// Imagen del código QR codificada en Base64 para escaneo en ventanilla o quiosco.
+    #[serde(default)]
+    pub qr_code: Option<String>,
+    /// Estado del registro (ej. "ACTIVE", "PENDING").
+    pub status: String,
+    /// Fecha de vencimiento o expiración del código Label Broker (si aplica).
+    #[serde(default)]
+    pub expiration_date: Option<String>,
+}
+
 /// Servicio de la API v3 de Generación y Gestión de Etiquetas Postales (`Labels v3`).
 #[derive(Debug, Clone)]
 pub struct LabelsService {
@@ -346,6 +406,57 @@ impl LabelsService {
             serde_json::from_str::<CancelLabelResponse>(&body).map_err(UspsError::Serialization)
         }
     }
+
+    /// Consulta los datos o la imagen de una etiqueta postal emitida previamente (`GET /labels/v3/label/{labelId}`).
+    #[instrument(skip(self), name = "get_label_data")]
+    pub async fn get_label_data(&self, label_id: &str) -> Result<CreateLabelResponse> {
+        let clean_id = label_id.trim();
+        if clean_id.is_empty() {
+            return Err(UspsError::InvalidInput(
+                "El label_id no puede estar vacío".to_string(),
+            ));
+        }
+
+        let endpoint = format!("/labels/v3/label/{clean_id}");
+        let empty_query: [(&str, &str); 0] = [];
+        self.client.get_with_query(&endpoint, &empty_query).await
+    }
+
+    /// Registra un envío para impresión en ventanilla o quiosco mediante USPS Label Broker (`POST /labels/v3/label-broker`).
+    ///
+    /// Retorna un `label_broker_id` y código QR para presentar desde dispositivos móviles.
+    #[instrument(skip(self), name = "create_label_broker")]
+    pub async fn create_label_broker(
+        &self,
+        req: &LabelBrokerRequest,
+    ) -> Result<LabelBrokerResponse> {
+        if req.from_address.street_address.trim().is_empty()
+            || req.from_address.city.trim().is_empty()
+            || req.from_address.state.trim().is_empty()
+        {
+            return Err(UspsError::InvalidInput(
+                "La dirección del remitente (from_address) está incompleta".to_string(),
+            ));
+        }
+
+        if req.to_address.street_address.trim().is_empty()
+            || req.to_address.city.trim().is_empty()
+            || req.to_address.state.trim().is_empty()
+        {
+            return Err(UspsError::InvalidInput(
+                "La dirección del destinatario (to_address) está incompleta".to_string(),
+            ));
+        }
+
+        if req.package_description.weight <= 0.0 {
+            return Err(UspsError::InvalidInput(
+                "El peso del paquete debe ser estrictamente mayor a 0 libras".to_string(),
+            ));
+        }
+
+        let endpoint = "/labels/v3/label-broker";
+        self.client.post_json(endpoint, req).await
+    }
 }
 
 #[cfg(test)]
@@ -394,5 +505,32 @@ mod tests {
         assert_eq!(LabelImageType::Png.to_string(), "PNG");
         assert_eq!(LabelImageType::Tiff.to_string(), "TIFF");
         assert_eq!(LabelImageType::Svg.to_string(), "SVG");
+    }
+
+    #[test]
+    fn label_broker_request_builder() {
+        let from = LabelPartyAddress::new("123 Sender Way", "Austin", "TX", "78701");
+        let to = LabelPartyAddress::new("456 Receiver Ave", "New York", "NY", "10001");
+        let pkg = PackageDescription::new(MailClass::PriorityMail, 1.5);
+
+        let req = LabelBrokerRequest::new(from, to, pkg).customer_reference_id("ORDER-5544");
+        assert_eq!(req.customer_reference_id.as_deref(), Some("ORDER-5544"));
+    }
+
+    #[test]
+    fn label_broker_response_deserialization() {
+        let json = r#"{
+            "labelBrokerId": "LB-887766",
+            "trackingNumber": "9405500000000000000011",
+            "qrCode": "iVBORw0KGgoAAA...",
+            "status": "ACTIVE",
+            "expirationDate": "2026-10-01"
+        }"#;
+
+        let res: LabelBrokerResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(res.label_broker_id, "LB-887766");
+        assert_eq!(res.tracking_number, "9405500000000000000011");
+        assert_eq!(res.status, "ACTIVE");
+        assert_eq!(res.expiration_date.as_deref(), Some("2026-10-01"));
     }
 }

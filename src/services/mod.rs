@@ -26,8 +26,9 @@ pub use addresses::{
 };
 pub use customs::{CustomsContentType, CustomsDeclaration, CustomsItem, NonDeliveryOption};
 pub use labels::{
-    CancelLabelResponse, CreateLabelRequest, CreateLabelResponse, ImageInfo, LabelImageType,
-    LabelPartyAddress, LabelSize, LabelsService, PackageDescription,
+    CancelLabelResponse, CreateLabelRequest, CreateLabelResponse, ImageInfo, LabelBrokerRequest,
+    LabelBrokerResponse, LabelImageType, LabelPartyAddress, LabelSize, LabelsService,
+    PackageDescription,
 };
 pub use locations::{
     DailyHours, LocationFacility, LocationSearchRequest, LocationSearchResponse,

@@ -100,7 +100,8 @@ usps_v3_api/
 │   ├── quickstart.rs           # Ejemplo rápido: direcciones y tracking
 │   └── shipping_workflow.rs    # Ciclo e-commerce: tarifas, estándares, etiquetas, manifiestos, webhooks
 ├── tests/
-│   └── integration_tests.rs    # Suite de pruebas de integración externa y concurrencia
+│   ├── integration_tests.rs    # Suite de pruebas de integración externa y concurrencia
+│   └── mock_server_tests.rs    # Pruebas HTTP mock con wiremock (OAuth2, retry 429, API errors)
 └── src/
     ├── lib.rs                  # Raíz del crate, re-exportaciones canónicas y doctests
     ├── core/                   # CAPA CENTRAL (Infraestructura y Transporte)
@@ -216,10 +217,12 @@ usps_v3_api/
   - `calculate_international_rates(&InternationalRateRequest) -> Result<InternationalRateResponse>`: Despacha `POST /prices/v3/international-base-rates/search`. Valida el código de país de 2 caracteres ISO (ej. `CA`, `GB`, `MX`, `ES`) y soporta `InternationalMailClass` (*Global Express Guaranteed, Priority Mail International, First-Class Package International, etc.*).
 
 #### 4.2.4. Módulo de Etiquetas Postales (`src/services/labels.rs`)
-- **Propósito:** Generación, emisión y cancelación de etiquetas postales con código de barras USPS.
+- **Propósito:** Generación, emisión, anulación de etiquetas postales con código de barras USPS y soporte para **USPS Label Broker** (código QR para impresión en ventanilla sin impresora).
 - **Servicios:**
   - `create_label(&CreateLabelRequest) -> Result<CreateLabelResponse>`: Despacha `POST /labels/v3/label`. Soporta formatos gráficos `LabelImageType` (*PDF, PNG, TIFF, SVG*) y entrega de imagen Base64 o URL de descarga directa.
   - `cancel_label(label_id) -> Result<CancelLabelResponse>`: Despacha `DELETE /labels/v3/label/{labelId}` para anular etiquetas y tramitar reembolsos de franqueo utilizando el cliente HTTP centralizado con reintentos.
+  - `create_label_broker(&LabelBrokerRequest) -> Result<LabelBrokerResponse>`: Despacha `POST /labels/v3/label-broker` para generar un ID de Label Broker y código QR que el cliente puede presentar en cualquier oficina postal de USPS para que le impriman la etiqueta.
+  - `get_label_data(label_id) -> Result<CreateLabelResponse>`: Consulta `GET /labels/v3/label/{labelId}` para descargar nuevamente los datos e imagen de una etiqueta generada previamente.
 
 #### 4.2.5. Módulo de Recolección de Paquetes (`src/services/pickup.rs`)
 - **Propósito:** Gestión integral de recolección de paquetes por el cartero a domicilio (`Carrier Pickup`).
@@ -275,7 +278,7 @@ El proyecto se valida de extremo a extremo mediante el conjunto de herramientas 
 # Compilar todo el SDK
 cargo build
 
-# Ejecutar las 44 pruebas (40 unitarias + 4 de integración) y doctests interactivos
+# Ejecutar las 49 pruebas (42 unitarias + 4 de integración + 3 de servidor mock wiremock) y doctests interactivos
 cargo test --all-targets --all-features
 
 # Verificar cumplimiento de formato oficial con rustfmt
@@ -295,6 +298,12 @@ El proyecto incluye un flujo de trabajo de GitHub Actions en `.github/workflows/
 - **Generación de Documentación:** `cargo doc --no-deps --all-features`
 - **Suite de Pruebas:** `cargo test --all-targets --all-features`
 - **Caché Eficiente:** Integración con `Swatinem/rust-cache@v2` para tiempos de compilación mínimos en CI.
+
+### 5.2. Suite de Pruebas con Servidor HTTP Simulado (`tests/mock_server_tests.rs`)
+Se utiliza `wiremock` para probar de forma determinística y sin dependencias externas de red:
+- **Flujo de Autenticación OAuth 2.0:** Negociación exitosa del token Bearer y validación de caché en memoria sin llamadas duplicadas.
+- **Resiliencia ante HTTP 429:** Simulación de límite de tasa superado (`Too Many Requests`) en el primer intento y éxito en el reintento automático mediante `RetryPolicy`.
+- **Mapeo Tipado de Errores de API:** Deserialización y verificación de estructuras `UspsError::Api` y `UspsApiErrorResponse` con mensajes estructurados de USPS.
 
 ---
 
@@ -320,18 +329,20 @@ Cada vez que se extienda el SDK:
   - Servicios v3: Direcciones, Tracking individual, Tarifas nacionales e internacionales, Etiquetas postales, Recolección a domicilio y Ubicaciones de oficinas.
   - Batería de 25 pruebas unitarias.
 
-### Versión 0.2.0 (Resiliencia, Estándares de Entrega, Pagos EPS, Aduana y CI/CD)
+### Versión 0.2.0 (Resiliencia, Estándares de Entrega, Pagos EPS, Aduana, Label Broker, Mock Testing y CI/CD)
 - **Fecha:** 2026-09-15
 - **Git Branch:** `main`
 - **Novedades de la Versión:**
   - **Nueva Resiliencia:** `RetryPolicy` con backoff exponencial y jitter determinístico ante códigos transitorios HTTP 429, 500, 502, 503 y 504 en `UspsClient`.
+  - **Soporte Label Broker v3:** Emisión de código QR y Label Broker ID (`create_label_broker`) para impresión en mostradores de oficinas postales y recuperación de datos de etiqueta (`get_label_data`).
   - **Nuevo Servicio:** `ServiceStandardsService` (`service-standards/v3`) para cálculo de fechas estimadas de entrega (EDD) y tiempos de tránsito origen-destino.
   - **Nuevo Servicio:** `PaymentsService` (`payments/v3`) para consulta de saldos EPS y autorizaciones de pago.
   - **Nuevo Módulo de Aduanas:** `CustomsDeclaration` y `CustomsItem` (`customs/v3`) para envíos internacionales con formularios CN22/CP72.
   - **Nuevo Servicio:** `ManifestsService` (`manifests/v3`) para generación de formularios SCAN Form (PS Form 5630).
   - **Nuevo Servicio:** `WebhooksService` (`subscriptions/v3`) para suscripción a notificaciones en tiempo real.
   - **Rastreo por Lotes:** Método `track_batch` en `TrackingService` para hasta 35 envíos simultáneos.
-  - **Suite de Pruebas de Integración:** Archivo `tests/integration_tests.rs` con validación de APIs públicas, concurrencia en Tokio y validaciones preventivas de entrada.
+  - **Suite de Pruebas de Integración y Mock Server:** Archivos `tests/integration_tests.rs` y `tests/mock_server_tests.rs` con `wiremock` para simulación de respuestas HTTP, OAuth2 y reintentos automáticos.
   - **Ejemplos Prácticos:** Directorio `examples/` con `quickstart.rs` y `shipping_workflow.rs`.
+  - **Documentación y README:** Insignias de crates.io, docs.rs, licencia dual, guía de testing y tabla exhaustiva de servicios.
   - **Pipeline CI/CD:** Flujo de trabajo en `.github/workflows/ci.yml`.
-  - Cobertura expandida a **44 pruebas automáticas y 1 doctest** con 100% de aprobación y 0 advertencias de Clippy.
+  - Cobertura expandida a **49 pruebas automáticas y 1 doctest** con 100% de aprobación y 0 advertencias de Clippy.

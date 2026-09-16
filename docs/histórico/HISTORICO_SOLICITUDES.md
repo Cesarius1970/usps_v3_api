@@ -379,3 +379,40 @@ Se continuó con la siguiente fase avanzada del desarrollo del SDK, completando 
    - Verificación de formato (`cargo fmt --check`) y análisis estricto de linter (`cargo clippy --all-targets --all-features -- -D warnings` con 0 advertencias).
    - Actualización del Manual Técnico `docs/MANUAL_TECNICO.md` y bitácora histórica.
    - Generación de commit bajo estándar Conventional Commits (`feat(sdk): add Payments v3 (EPS) and Customs v3 international declarations`).
+
+---
+
+## Interacción #13
+
+### Solicitud del Usuario
+```text
+Continuar con las siguientes fases del desarrollo segun el plan
+```
+
+### Respuesta del Agente
+Se completó la siguiente fase del plan de desarrollo, agregando capacidades de impresión física sin hardware mediante Label Broker, una suite de pruebas HTTP determinística con simulador de servidor y renovación integral de la documentación del proyecto:
+
+1. **Soporte Oficial de USPS Label Broker v3 (`src/services/labels.rs`):**
+   - Implementación de [`LabelBrokerRequest`] y [`LabelBrokerResponse`] para la emisión de códigos QR y códigos de Label Broker (`POST /labels/v3/label-broker`).
+   - Permite a los remitentes presentar un código QR en cualquier mostrador postal de USPS para que el empleado imprima la etiqueta sin requerir impresora personal o térmica.
+   - Implementación del método `LabelsService::get_label_data` (`GET /labels/v3/label/{labelId}`) para la recuperación posterior de imágenes o metadatos de etiquetas emitidas.
+   - Re-exportación completa de los tipos y métodos en `src/services/mod.rs` y `src/lib.rs`.
+
+2. **Suite de Pruebas con Servidor HTTP Simulado (`tests/mock_server_tests.rs`):**
+   - Incorporación de `wiremock` (`0.6.5`) en `dev-dependencies` para pruebas sin red externa real ni secretos productivos.
+   - Test de negociación y almacenamiento en caché de token Bearer OAuth 2.0: valida que múltiples llamadas consecutivas utilicen el token almacenado en `RwLock` sin emitir peticiones redundantes.
+   - Test de resiliencia ante `HTTP 429 Too Many Requests`: valida el reintento automático transparente gobernado por `RetryPolicy` ante respuestas de saturación de cuota.
+   - Test de mapeo tipado de errores de API: valida que errores HTTP estructurados devueltos por USPS se mapeen adecuadamente a variantes `UspsError::Api` con `UspsApiErrorResponse`.
+
+3. **Renovación Integral de la Documentación (`README.md`):**
+   - Incorporación de insignias oficiales (Crates.io, Docs.rs, Licencia dual MIT/Apache 2.0, CI Build Status).
+   - Tabla exhaustiva de cobertura de todos los servicios v3 de USPS implementados con sus endpoints y módulos correspondientes.
+   - Guía clara de instalación, configuración por variables de entorno y ejemplos reproducibles de uso.
+   - Documentación de pruebas unitarias, de integración y con `wiremock`.
+
+4. **Calidad de Código y Métricas de Calidad:**
+   - Verificación de formato con `cargo fmt --check` (100% compliant).
+   - Análisis estático estricto con `cargo clippy --all-targets --all-features -- -D warnings` (0 advertencias).
+   - Ejecución de la suite completa de pruebas: **49 pruebas automáticas (42 unitarias + 4 de integración + 3 de wiremock) y 1 doctest**, todas superadas al 100%.
+   - Actualización sincrónica del manual técnico `docs/MANUAL_TECNICO.md`.
+   - Generación de commit bajo estándar Conventional Commits (`feat(sdk): add Label Broker support, wiremock testing suite, and enhanced README`).
