@@ -85,7 +85,7 @@ pub mod services;
 pub use core::{
     ApiErrorDetail, OAuthTokenResponse, Result, RetryPolicy, TokenManager, USPS_CAT_BASE_URL,
     USPS_PROD_BASE_URL, UspsApiErrorResponse, UspsClient, UspsClientBuilder, UspsConfig,
-    UspsEnvironment, UspsError,
+    UspsEnvironment, UspsError, UspsErrorCode,
 };
 
 // Re-exportaciones públicas del catálogo de servicios

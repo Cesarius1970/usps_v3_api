@@ -14,6 +14,7 @@ Cliente SDK en Rust idiomático, fuertemente tipado, asíncrono y listo para pro
 - **Arquitectura Enterprise en Capas:** Separación limpia entre infraestructura transversal (`core`) y servicios de negocio (`services`).
 - **Autenticación Inteligente OAuth 2.0:** Auto-refresh en memoria con `tokio::sync::RwLock`, renovación transparente previa a caducidad (`double-checked locking`) y sanitización de secretos en logs (`[REDACTED]`).
 - **Resiliencia Automática (`RetryPolicy`):** Backoff exponencial con jitter determinístico para manejar transparentemente `429 Too Many Requests`, `500`, `502`, `503` y `504`.
+- **Catálogo Tipado de Errores (`UspsErrorCode`):** Discriminación semántica de códigos de error oficiales (`AddressNotFound`, `RateLimitExceeded`, `InvalidCredentials`, etc.) y métodos asistentes ergonómicos (`is_not_found()`, `is_rate_limited()`, `is_auth_error()`).
 - **Rastreo Masivo por Lotes:** Soporte de rastreo simultáneo de hasta 35 paquetes por llamada en `TrackingService`.
 - **Soporte Completo de Servicios USPS REST v3:**
 
@@ -40,11 +41,11 @@ Agrega `usps_v3_api` a tu `Cargo.toml`:
 ```toml
 [dependencies]
 # Por defecto utiliza 'rustls-tls' (cero dependencias de C / OpenSSL)
-usps_v3_api = "0.2.1"
+usps_v3_api = "0.3.0"
 tokio = { version = "1", features = ["full"] }
 
 # O si prefieres utilizar los certificados nativos del sistema operativo (OpenSSL / SChannel / SecurityFramework):
-# usps_v3_api = { version = "0.2.1", default-features = false, features = ["native-tls"] }
+# usps_v3_api = { version = "0.3.0", default-features = false, features = ["native-tls"] }
 ```
 
 ---

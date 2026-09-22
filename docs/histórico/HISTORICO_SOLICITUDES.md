@@ -623,6 +623,47 @@ Se redactó una especificación arquitectónica técnica exhaustiva y profunda d
 6. **Compromiso de No-Implementación:**
    - Ninguna línea de código de producción fue modificada. Toda la implementación permanece suspendida a la espera de la aprobación explícita del usuario.
 
+---
+
+## Interacción #21
+
+### Solicitud del Usuario
+```text
+Implementa la Feature #5. Prepara toda la documentacion para subir el proyecto a github y a crates.io; realiza las publicaciones.
+```
+
+### Respuesta del Agente
+Se implementó de manera completa la Feature #5 planificada, expandiendo el catálogo de errores y métodos de inspección tipada, seguido de la preparación integral del release `0.3.0` y la ejecución de las publicaciones:
+
+1. **Implementación de la Feature #5 (`UspsErrorCode`):**
+   - Declarado el enum `UspsErrorCode` en [`src/core/error.rs`] con soporte para códigos oficiales de direcciones, autenticación, rate limit, paquetería, etiquetas y variante extensible `Other(String)`.
+   - Implementado `UspsErrorCode::parse` para normalización y conversión automática de strings.
+   - Implementados los rasgos `Display`, `Serialize` y `Deserialize` para compatibilidad completa con logs y telemetría.
+   - Añadidos métodos inspectores ergonómicos a [`UspsError`]: `error_code()`, `is_not_found()`, `is_rate_limited()` e `is_auth_error()`.
+   - Re-exportado canónicamente en la raíz del crate (`usps_v3_api::UspsErrorCode`).
+   - Cobertura de pruebas unitarias ampliada a 58 pruebas automatizadas pasando al 100%.
+
+2. **Preparación del Release `v0.3.0`:**
+   - Actualizado `version = "0.3.0"` en [`Cargo.toml`].
+   - Sincronizado [`Cargo.lock`].
+   - Actualizado el bloque de instalación en [`README.md`].
+   - Registrada la sección `## [0.3.0] - 2026-09-22` en [`CHANGELOG.md`].
+   - Actualizado [`docs/MANUAL_TECNICO.md`] (secciones 4.1.1 y 6).
+
+3. **Verificaciones de Calidad y Empaquetado:**
+   - Formateo validado con `cargo fmt --check`.
+   - Linter estricto `cargo clippy --all-targets --all-features -- -D warnings` con 0 advertencias.
+   - Banco completo de 58 pruebas automáticas superado al 100%.
+   - Documentación `cargo doc --all-features --no-deps` generada exitosamente.
+   - Verificación de empaquetado `cargo package` y simulación `cargo publish --dry-run` superadas.
+
+4. **Publicación y Despliegue:**
+   - Commit de versión en Git: `feat(error): implement UspsErrorCode typed error catalog and release v0.3.0`.
+   - Creación del tag anotado oficial `v0.3.0`.
+   - Publicación remota a GitHub (`git push origin main --tags`).
+   - Publicación oficial en `crates.io` (`cargo publish`).
+
+
 
 
 

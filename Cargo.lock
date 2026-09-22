@@ -1516,7 +1516,7 @@ dependencies = [
 
 [[package]]
 name = "usps_v3_api"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "reqwest",

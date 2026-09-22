@@ -5,6 +5,27 @@ Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-22
+
+### Añadido
+- **Catálogo Tipado de Códigos de Error USPS (`UspsErrorCode`):**
+  - Nuevo enum tipado `UspsErrorCode` en `src/core/error.rs` para discriminación estructurada de fallos devueltos por la API de USPS sin depender de cadenas mágicas arbitrarias.
+  - Mapeo de categorías principales:
+    - *Direcciones:* `AddressNotFound`, `InvalidZipCode`, `MultipleAddressesFound`.
+    - *Autenticación y Permisos:* `InvalidCredentials`, `TokenExpired`, `Unauthorized`.
+    - *Límites y Cuotas:* `RateLimitExceeded`, `QuotaExceeded`, `ServiceUnavailable`.
+    - *Rastreo y Paquetería:* `TrackingNumberNotFound`, `InvalidTrackingNumberFormat`.
+    - *Etiquetas, Manifiestos y Pagos:* `LabelAlreadyCancelled`, `LabelExpired`, `InsufficientFunds`, `DuplicateManifest`, `PickupNotAvailable`.
+    - *Extensibilidad:* Variante `Other(String)` con atributo `#[non_exhaustive]`.
+  - Función de normalización y resolución textual `UspsErrorCode::parse(&str)`.
+  - Implementación de `Display`, `Serialize` y `Deserialize` para integración con sistemas de telemetría y logs.
+  - Métodos inspectores ergonómicos en `UspsError`:
+    - `error.error_code() -> Option<UspsErrorCode>`: Extracción o inferencia semántica del código de error.
+    - `error.is_not_found() -> bool`: Detección instantánea de recursos ausentes (404 / NotFound).
+    - `error.is_rate_limited() -> bool`: Detección de throttling o rate limits (429 / RateLimitExceeded).
+    - `error.is_auth_error() -> bool`: Detección de fallos en credenciales o expiración de tokens (401 / 403 / Auth).
+  - Re-exportación canónica en `usps_v3_api::UspsErrorCode` y `usps_v3_api::core::UspsErrorCode`.
+
 ## [0.2.1] - 2026-09-22
 
 ### Cambiado

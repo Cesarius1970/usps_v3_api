@@ -17,5 +17,5 @@ pub mod retry;
 pub use auth::{OAuthTokenResponse, TokenManager};
 pub use client::{UspsClient, UspsClientBuilder};
 pub use config::{USPS_CAT_BASE_URL, USPS_PROD_BASE_URL, UspsConfig, UspsEnvironment};
-pub use error::{ApiErrorDetail, Result, UspsApiErrorResponse, UspsError};
+pub use error::{ApiErrorDetail, Result, UspsApiErrorResponse, UspsError, UspsErrorCode};
 pub use retry::RetryPolicy;

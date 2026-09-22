@@ -138,10 +138,16 @@ usps_v3_api/
 ### 4.1. Capa Central (`src/core/`)
 
 #### 4.1.1. Módulo de Errores (`src/core/error.rs`)
-- **Propósito:** Proporcionar una jerarquía tipada que permita al consumidor inspeccionar la causa exacta de una falla sin conversiones de cadenas opacas.
+- **Propósito:** Proporcionar una jerarquía tipada que permita al consumidor inspeccionar la causa exacta de una falla sin conversiones de cadenas opacas ni dependencia de textos volátiles.
 - **Tipos clave:**
   - `UspsError`: Enum que agrupa errores de red (`reqwest::Error`), serialización (`serde_json::Error`), autenticación OAuth 2.0 (`UspsError::Auth`), datos de entrada inválidos (`UspsError::InvalidInput`) y errores de API (`UspsError::Api`).
+  - `UspsErrorCode`: Catálogo tipado de códigos de error oficiales de USPS (`AddressNotFound`, `InvalidZipCode`, `MultipleAddressesFound`, `InvalidCredentials`, `TokenExpired`, `Unauthorized`, `RateLimitExceeded`, `QuotaExceeded`, `ServiceUnavailable`, `TrackingNumberNotFound`, `InvalidTrackingNumberFormat`, `LabelAlreadyCancelled`, `LabelExpired`, `InsufficientFunds`, `DuplicateManifest`, `PickupNotAvailable`, `Other`).
   - `UspsApiErrorResponse`: Modela la carga JSON de respuesta de error oficial de USPS (códigos, descripciones y vectores de `ApiErrorDetail`).
+- **Métodos de Inspección Semántica en `UspsError`:**
+  - `error_code(&self) -> Option<UspsErrorCode>`: Infiere o extrae el código tipado a partir de códigos estructurados o del estado HTTP.
+  - `is_not_found(&self) -> bool`: Comprobación rápida para 404 / NotFound.
+  - `is_rate_limited(&self) -> bool`: Comprobación para 429 / RateLimitExceeded.
+  - `is_auth_error(&self) -> bool`: Comprobación para 401 / 403 / fallos de credenciales OAuth2.
 - **Algoritmo `UspsError::from_response(status, body)`:**
   Evalúa el cuerpo HTTP retornado; si es un JSON estructurado, extrae los detalles técnicos y advertencias de USPS; si no lo es (ej. error 502 de gateway intermedio), realiza fallback seguro sin entrar en pánico.
 
@@ -366,6 +372,17 @@ Cada vez que se extienda el SDK:
   - **Documentación y Changelog:** Archivo `CHANGELOG.md` estandarizado, insignias en `README.md` y manual técnico vivo sincronizado.
   - **Pipeline CI/CD:** Flujo de trabajo en `.github/workflows/ci.yml`.
   - Cobertura expandida a **55 pruebas automáticas y 1 doctest** con 100% de aprobación y 0 advertencias de Clippy.
+
+### Versión 0.3.0 (Catálogo Tipado de Códigos de Error USPS y Métodos de Inspección Semántica)
+- **Fecha:** 2026-09-22
+- **Git Tag:** `v0.3.0`
+- **Registro en crates.io:** `usps_v3_api = "0.3.0"`
+- **Novedades de la Versión:**
+  - **Catálogo Tipado de Errores USPS (`UspsErrorCode`):** Implementación de la Feature #5 en `src/core/error.rs`, mapeando códigos oficiales para direcciones, autenticación, rate limiting, paquetería y etiquetas.
+  - **Inferencia y Parseo Automático:** Función `UspsErrorCode::parse` con normalización y discriminación por códigos estructurados o códigos de estado HTTP.
+  - **Métodos Asistentes en `UspsError`:** `error_code()`, `is_not_found()`, `is_rate_limited()` y `is_auth_error()` para control de flujo limpio e idiomático sin comparar cadenas mágicas.
+  - **Soporte de Serialización y Logs:** Implementación de `Display`, `Serialize` y `Deserialize` para `UspsErrorCode`.
+  - **Cobertura de Pruebas:** Batería expandida a **58 pruebas automatizadas** (50 unitarias + 4 de integración + 4 de WireMock) pasando al 100% y 0 advertencias de Clippy.
 
 ### Versión 0.2.1 (Refactorización HTTP DRY, Modularización de Precios/Etiquetas y Algoritmo SplitMix64 Jitter)
 - **Fecha:** 2026-09-22
