@@ -147,12 +147,10 @@ impl UspsClient {
         &self.inner.token_manager
     }
 
-    /// Ejecuta una solicitud HTTP GET autenticada con reintentos automáticos configurados.
-    #[instrument(skip(self, query), name = "usps_get_with_query")]
-    pub async fn get_with_query<Q, T>(&self, endpoint: &str, query: &Q) -> Result<T>
+    /// Despacha una solicitud HTTP aplicando la política de reintentos y autenticación OAuth 2.0 unificada.
+    async fn execute_with_retry<F>(&self, endpoint: &str, build_req: F) -> Result<String>
     where
-        Q: Serialize + ?Sized,
-        T: DeserializeOwned,
+        F: Fn(&HttpClient, &str, &str) -> reqwest::RequestBuilder,
     {
         let url = format!("{}{endpoint}", self.inner.config.environment.base_url());
         let mut attempt = 0;
@@ -160,118 +158,12 @@ impl UspsClient {
         loop {
             let token = self.inner.token_manager.get_token().await?;
 
-            debug!("Enviando GET autenticado a {}", url);
-            let response = self
-                .inner
-                .http_client
-                .get(&url)
-                .header("Authorization", format!("Bearer {token}"))
-                .header("Accept", "application/json")
-                .query(query)
-                .send()
-                .await?;
+            let request = build_req(&self.inner.http_client, &url, &token)
+                .header("Accept", "application/json");
 
+            let response = request.send().await.map_err(UspsError::Http)?;
             let status = response.status();
-            let body = response.text().await?;
-
-            if status.is_success() {
-                return serde_json::from_str::<T>(&body).map_err(UspsError::Serialization);
-            }
-
-            if RetryPolicy::is_retryable_status(status)
-                && attempt < self.inner.config.retry_policy.max_retries
-            {
-                attempt += 1;
-                let backoff = self.inner.config.retry_policy.calculate_backoff(attempt);
-                tracing::warn!(
-                    "Error reintentable HTTP {} en {}. Reintentando {}/{} tras {:?}",
-                    status,
-                    endpoint,
-                    attempt,
-                    self.inner.config.retry_policy.max_retries,
-                    backoff
-                );
-                tokio::time::sleep(backoff).await;
-                continue;
-            }
-
-            return Err(UspsError::from_response(status, &body));
-        }
-    }
-
-    /// Ejecuta una solicitud HTTP POST autenticada con cuerpo JSON y reintentos automáticos.
-    #[instrument(skip(self, body), name = "usps_post_json")]
-    pub async fn post_json<B, T>(&self, endpoint: &str, body: &B) -> Result<T>
-    where
-        B: Serialize + ?Sized,
-        T: DeserializeOwned,
-    {
-        let url = format!("{}{endpoint}", self.inner.config.environment.base_url());
-        let mut attempt = 0;
-
-        loop {
-            let token = self.inner.token_manager.get_token().await?;
-
-            debug!("Enviando POST JSON autenticado a {}", url);
-            let response = self
-                .inner
-                .http_client
-                .post(&url)
-                .header("Authorization", format!("Bearer {token}"))
-                .header("Accept", "application/json")
-                .json(body)
-                .send()
-                .await?;
-
-            let status = response.status();
-            let body = response.text().await?;
-
-            if status.is_success() {
-                return serde_json::from_str::<T>(&body).map_err(UspsError::Serialization);
-            }
-
-            if RetryPolicy::is_retryable_status(status)
-                && attempt < self.inner.config.retry_policy.max_retries
-            {
-                attempt += 1;
-                let backoff = self.inner.config.retry_policy.calculate_backoff(attempt);
-                tracing::warn!(
-                    "Error reintentable HTTP {} en {}. Reintentando {}/{} tras {:?}",
-                    status,
-                    endpoint,
-                    attempt,
-                    self.inner.config.retry_policy.max_retries,
-                    backoff
-                );
-                tokio::time::sleep(backoff).await;
-                continue;
-            }
-
-            return Err(UspsError::from_response(status, &body));
-        }
-    }
-
-    /// Ejecuta una solicitud HTTP DELETE autenticada con reintentos automáticos configurados.
-    #[instrument(skip(self), name = "usps_delete")]
-    pub async fn delete(&self, endpoint: &str) -> Result<String> {
-        let url = format!("{}{endpoint}", self.inner.config.environment.base_url());
-        let mut attempt = 0;
-
-        loop {
-            let token = self.inner.token_manager.get_token().await?;
-
-            debug!("Enviando DELETE autenticado a {}", url);
-            let response = self
-                .inner
-                .http_client
-                .delete(&url)
-                .header("Authorization", format!("Bearer {token}"))
-                .header("Accept", "application/json")
-                .send()
-                .await?;
-
-            let status = response.status();
-            let body = response.text().await?;
+            let body = response.text().await.map_err(UspsError::Http)?;
 
             if status.is_success() {
                 return Ok(body);
@@ -283,12 +175,12 @@ impl UspsClient {
                 attempt += 1;
                 let backoff = self.inner.config.retry_policy.calculate_backoff(attempt);
                 tracing::warn!(
-                    "Error reintentable HTTP {} en {}. Reintentando {}/{} tras {:?}",
-                    status,
-                    endpoint,
-                    attempt,
-                    self.inner.config.retry_policy.max_retries,
-                    backoff
+                    attempt = attempt,
+                    max_retries = self.inner.config.retry_policy.max_retries,
+                    status = %status,
+                    endpoint = endpoint,
+                    backoff_ms = backoff.as_millis(),
+                    "Error reintentable HTTP de USPS. Reintentando tras pausa"
                 );
                 tokio::time::sleep(backoff).await;
                 continue;
@@ -296,6 +188,55 @@ impl UspsClient {
 
             return Err(UspsError::from_response(status, &body));
         }
+    }
+
+    /// Ejecuta una solicitud HTTP GET autenticada con reintentos automáticos configurados.
+    #[instrument(skip(self, query), name = "usps_get_with_query")]
+    pub async fn get_with_query<Q, T>(&self, endpoint: &str, query: &Q) -> Result<T>
+    where
+        Q: Serialize + ?Sized,
+        T: DeserializeOwned,
+    {
+        debug!("Enviando GET autenticado a {}", endpoint);
+        let body = self
+            .execute_with_retry(endpoint, |http, url, token| {
+                http.get(url)
+                    .header("Authorization", format!("Bearer {token}"))
+                    .query(query)
+            })
+            .await?;
+
+        serde_json::from_str::<T>(&body).map_err(UspsError::Serialization)
+    }
+
+    /// Ejecuta una solicitud HTTP POST autenticada con cuerpo JSON y reintentos automáticos.
+    #[instrument(skip(self, body), name = "usps_post_json")]
+    pub async fn post_json<B, T>(&self, endpoint: &str, body: &B) -> Result<T>
+    where
+        B: Serialize + ?Sized,
+        T: DeserializeOwned,
+    {
+        debug!("Enviando POST JSON autenticado a {}", endpoint);
+        let res_body = self
+            .execute_with_retry(endpoint, |http, url, token| {
+                http.post(url)
+                    .header("Authorization", format!("Bearer {token}"))
+                    .json(body)
+            })
+            .await?;
+
+        serde_json::from_str::<T>(&res_body).map_err(UspsError::Serialization)
+    }
+
+    /// Ejecuta una solicitud HTTP DELETE autenticada con reintentos automáticos configurados.
+    #[instrument(skip(self), name = "usps_delete")]
+    pub async fn delete(&self, endpoint: &str) -> Result<String> {
+        debug!("Enviando DELETE autenticado a {}", endpoint);
+        self.execute_with_retry(endpoint, |http, url, token| {
+            http.delete(url)
+                .header("Authorization", format!("Bearer {token}"))
+        })
+        .await
     }
 }
 

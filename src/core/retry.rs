@@ -8,9 +8,29 @@
 
 //! Políticas de resiliencia, reintentos automáticos y backoff exponencial para el cliente USPS.
 
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use reqwest::StatusCode;
+
+static JITTER_SEED: AtomicU64 = AtomicU64::new(0);
+
+fn next_random_u64() -> u64 {
+    let mut state = JITTER_SEED.load(Ordering::Relaxed);
+    if state == 0 {
+        state = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0x9E37_79B9_7F4A_7C15);
+    }
+    // Algoritmo SplitMix64
+    state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    JITTER_SEED.store(state, Ordering::Relaxed);
+    let mut z = state;
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
 
 /// Configuración de política de reintentos para mitigar errores transitorios de red o saturación de cuota.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,7 +87,8 @@ impl RetryPolicy {
         )
     }
 
-    /// Calcula la duración de espera para un intento determinado usando backoff exponencial acotado.
+    /// Calcula la duración de espera para un intento determinado usando backoff exponencial con Jitter
+    /// para mitigar problemas de sincronización de reintentos concurrentes (*thundering herd*).
     #[must_use]
     pub fn calculate_backoff(&self, attempt: u32) -> Duration {
         if attempt == 0 || self.max_retries == 0 {
@@ -75,9 +96,20 @@ impl RetryPolicy {
         }
 
         let factor = 2u64.saturating_pow(attempt.saturating_sub(1));
-        let calculated = self.initial_delay.saturating_mul(factor as u32);
+        let max_calculated = self
+            .initial_delay
+            .saturating_mul(factor as u32)
+            .min(self.max_delay);
+        let max_millis = max_calculated.as_millis() as u64;
 
-        calculated.min(self.max_delay)
+        if max_millis == 0 {
+            return Duration::ZERO;
+        }
+
+        // Decorrelated Equal Jitter: rango uniforme en [max_millis / 2, max_millis]
+        let half = max_millis / 2;
+        let random_part = next_random_u64() % (half.max(1) + 1);
+        Duration::from_millis(half + random_part)
     }
 }
 
@@ -106,11 +138,15 @@ mod tests {
         let delay_2 = policy.calculate_backoff(2);
         let delay_3 = policy.calculate_backoff(3);
 
-        assert_eq!(delay_1, Duration::from_millis(200));
-        assert_eq!(delay_2, Duration::from_millis(400));
-        assert_eq!(delay_3, Duration::from_millis(800));
+        // Intento 1: base = 200ms -> rango con jitter [100ms, 200ms]
+        assert!(delay_1 >= Duration::from_millis(100) && delay_1 <= Duration::from_millis(200));
+        // Intento 2: base = 400ms -> rango con jitter [200ms, 400ms]
+        assert!(delay_2 >= Duration::from_millis(200) && delay_2 <= Duration::from_millis(400));
+        // Intento 3: base = 800ms -> rango con jitter [400ms, 800ms]
+        assert!(delay_3 >= Duration::from_millis(400) && delay_3 <= Duration::from_millis(800));
 
         let capped = policy.calculate_backoff(10);
-        assert_eq!(capped, Duration::from_secs(3));
+        // Capped a max_delay (3s) -> rango con jitter [1500ms, 3000ms]
+        assert!(capped >= Duration::from_millis(1500) && capped <= Duration::from_secs(3));
     }
 }

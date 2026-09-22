@@ -116,12 +116,16 @@ usps_v3_api/
         ├── mod.rs              # Re-exportaciones públicas del catálogo de servicios
         ├── addresses.rs        # Módulo de Direcciones v3 (Addresses v3)
         ├── customs.rs          # Módulo de Declaraciones de Aduana Internacionales (Customs v3)
-        ├── labels.rs           # Módulo de Etiquetas Postales v3 (Labels v3)
+        ├── labels/             # Módulo de Etiquetas Postales v3 (Labels v3)
+        │   ├── mod.rs          # Servicio LabelsService y pruebas unitarias
+        │   └── types.rs        # DTOs y modelos de etiquetas y Label Broker
         ├── locations.rs        # Módulo de Ubicaciones e Instalaciones v3 (Locations v3)
         ├── manifests.rs        # Módulo de Manifiestos SCAN Form v3 (Manifests v3)
         ├── payments.rs         # Módulo de Pagos y Cuentas EPS v3 (Payments v3)
         ├── pickup.rs           # Módulo de Recolección de Paquetes v3 (Pickup v3)
-        ├── prices.rs           # Módulo de Precios y Tarifas Nacionales/Internacionales (Prices v3)
+        ├── prices/             # Módulo de Precios y Tarifas Nacionales/Internacionales (Prices v3)
+        │   ├── mod.rs          # Servicio PricesService y pruebas unitarias
+        │   └── types.rs        # DTOs y modelos de tarifas domésticas, internacionales y extra services
         ├── standards.rs        # Módulo de Estándares de Servicio y Tránsito v3 (Service Standards v3)
         ├── tracking.rs         # Módulo de Seguimiento de Envíos v3 (Tracking v3)
         └── webhooks.rs         # Módulo de Suscripciones y Webhooks v3 (Subscriptions v3)
@@ -165,9 +169,10 @@ usps_v3_api/
 - **Patrón Builder (`UspsClientBuilder`):**
   Permite configuración fluida de credenciales, timeout, política de reintentos y entorno con validación previa de datos obligatorios.
 - **Métodos HTTP Reutilizables:**
-  - `get_with_query(endpoint, query)`: Despacho de peticiones GET autenticadas con bucle de reintentos y deserialización JSON.
-  - `post_json(endpoint, body)`: Despacho de peticiones POST autenticadas con cuerpo JSON, bucle de reintentos y deserialización.
-  - `delete(endpoint)`: Despacho de peticiones DELETE autenticadas con bucle de reintentos y soporte de respuestas vacías (204/200).
+  - `execute_with_retry(method, endpoint, query, body, needs_body)`: Método privado nuclear que centraliza la obtención de token, la construcción de cabeceras, la inyección del timeout por petición, el bucle de reintentos exponencial con jitter y el mapeo uniforme de códigos de error HTTP a `UspsError`.
+  - `get_with_query(endpoint, query)`: Despacho de peticiones GET autenticadas delegando en `execute_with_retry` con deserialización JSON.
+  - `post_json(endpoint, body)`: Despacho de peticiones POST autenticadas con cuerpo JSON delegando en `execute_with_retry` y deserialización JSON.
+  - `delete(endpoint)`: Despacho de peticiones DELETE autenticadas delegando en `execute_with_retry` con soporte de respuestas vacías (204/200).
 - **Servicios Integrados:**
   - `client.addresses()` -> `AddressesService`
   - `client.tracking()` -> `TrackingService`
@@ -186,7 +191,7 @@ usps_v3_api/
   - `max_retries`: Número máximo de intentos (por defecto 3).
   - `initial_delay`: Demora base inicial (por defecto 200 ms).
   - `max_delay`: Límite superior de espera (por defecto 5.000 ms).
-  - `calculate_backoff(attempt)`: Backoff exponencial acotado.
+  - `calculate_backoff(attempt)`: Backoff exponencial acotado con fluctuación aleatoria (*Equal Jitter* en el intervalo `[max/2, max]`), implementado mediante un generador pseudoaleatorio *SplitMix64* nativo con semilla `AtomicU64`, garantizando thread-safety sin dependencias pesadas de crates aleatorios externos.
 - **Algoritmo de Detección de Códigos Reintentables:**
   Evalúa el código de estado HTTP y reintenta ante:
   - `429 Too Many Requests`: Respeto a ventanas de límite de cuota o rate limiting.
@@ -212,14 +217,16 @@ usps_v3_api/
   - `track_batch(tracking_numbers, TrackingExpand) -> Result<Vec<TrackingResponse>>`: Consulta en una única llamada HTTP de hasta 35 números de seguimiento (`GET /tracking/v3/tracking?trackingNumbers=...`), validando límites y formatos.
   - `request_proof_of_delivery(&ProofOfDeliveryRequest) -> Result<ProofOfDeliveryResponse>`: Despacha `POST /tracking/v3/proof-of-delivery` para solicitar el envío por correo de la Prueba Electrónica de Entrega (**ePOD**) oficial de USPS con hoja de firma o en formato carta.
 
-#### 4.2.3. Módulo de Precios y Tarifas (`src/services/prices.rs`)
+#### 4.2.3. Módulo de Precios y Tarifas (`src/services/prices/`)
+- **Estructura Modular:** Dividido en `mod.rs` (lógica del servicio `PricesService` y pruebas unitarias) y `types.rs` (definición de DTOs, enums y esquemas de tarifas).
 - **Propósito:** Cálculo y cotización de tarifas de franqueo para envíos nacionales, internacionales y servicios especiales adicionales.
 - **Servicios:**
   - `calculate_domestic_rates(&DomesticRateRequest) -> Result<DomesticRateResponse>`: Despacha `POST /prices/v3/base-rates/search`. Soporta `MailClass` (*Priority Mail, USPS Ground Advantage, Priority Mail Express, etc.*) y `ProcessingCategory`.
   - `calculate_international_rates(&InternationalRateRequest) -> Result<InternationalRateResponse>`: Despacha `POST /prices/v3/international-base-rates/search`. Valida el código de país de 2 caracteres ISO (ej. `CA`, `GB`, `MX`, `ES`) y soporta `InternationalMailClass` (*Global Express Guaranteed, Priority Mail International, First-Class Package International, etc.*).
   - `calculate_extra_services(&ExtraServicesRateRequest) -> Result<ExtraServicesRateResponse>`: Despacha `POST /prices/v3/extra-services`. Cotiza tarifas complementarias oficiales (`ExtraServiceType`: seguro de cobertura, acuse de recibo `ReturnReceipt`, confirmación de firma `SignatureConfirmation`, `AdultSignatureRequired`, `RegisteredMail`, etc.).
 
-#### 4.2.4. Módulo de Etiquetas Postales (`src/services/labels.rs`)
+#### 4.2.4. Módulo de Etiquetas Postales (`src/services/labels/`)
+- **Estructura Modular:** Dividido en `mod.rs` (lógica del servicio `LabelsService` y pruebas unitarias) y `types.rs` (estructuras de solicitud/respuesta, metadatos aduaneros, imágenes de etiqueta y enums de configuración).
 - **Propósito:** Generación, emisión, anulación de etiquetas postales con código de barras USPS y soporte para **USPS Label Broker** (código QR para impresión en ventanilla sin impresora).
 - **Servicios:**
   - `create_label(&CreateLabelRequest) -> Result<CreateLabelResponse>`: Despacha `POST /labels/v3/label`. Soporta formatos gráficos `LabelImageType` (*PDF, PNG, TIFF, SVG*) y entrega de imagen Base64 o URL de descarga directa.

@@ -509,3 +509,39 @@ Se llevó a cabo la consolidación, etiquetado formal, sincronización con GitHu
 
 4. **Documentación y Cierre de Ciclo:**
    - Actualización sincrónica de `docs/MANUAL_TECNICO.md` y de la bitácora histórica.
+
+---
+
+## Interacción #17
+
+### Solicitud del Usuario
+```text
+Analiza este proyecto y dame los detalles completos. Recomienda refactorizaciones necesarias y alguna nueva funcionalidad
+-> Documenta profundamente la implementacion de los 3 Refactorizaciones recomendadas. No implementes nada hasta recibir la aprobacion del plan
+-> [Approved] plan_refactorizaciones.md
+```
+
+### Respuesta del Agente
+Se llevó a cabo un análisis integral de arquitectura de la base de código tras la versión `0.2.0`, identificando oportunidades de mejora estructural y formulando un plan de refactorización (`plan_refactorizaciones.md`) que fue aprobado por el usuario. Posteriormente, se implementaron con éxito las 3 refactorizaciones planificadas:
+
+1. **R1: Unificación del Despacho HTTP y Reintentos (`src/core/client.rs`):**
+   - Creación del método privado centralizado `execute_with_retry(method, endpoint, query, body, needs_body)`.
+   - Consolidación del bucle de reintentos exponencial con *jitter*, resolución automática de tokens OAuth 2.0, inyección de timeout por petición y manejo de códigos HTTP y errores de API.
+   - Refactorización de `get_with_query`, `post_json` y `delete` a métodos concisos de 1-3 líneas, eliminando ~95 líneas de lógica duplicada.
+
+2. **R2: Modularización de Servicios Extensos (`src/services/prices/` y `src/services/labels/`):**
+   - División de `src/services/prices.rs` en el módulo `src/services/prices/` compuesto por `types.rs` (estructuras, DTOs y enums de tarifas) y `mod.rs` (lógica del servicio `PricesService` y pruebas unitarias).
+   - División de `src/services/labels.rs` en el módulo `src/services/labels/` compuesto por `types.rs` (DTOs, imágenes, metadatos y aduanas) y `mod.rs` (lógica de `LabelsService` y pruebas unitarias).
+   - Preservación del 100% de retrocompatibilidad y exportaciones públicas sin rupturas de API (`breaking changes`).
+
+3. **R3: Formalización Algorítmica de Jitter en Reintentos (`src/core/retry.rs`):**
+   - Reemplazo del multiplicador estático pseudoaleatorio por un algoritmo formal de *Equal Jitter* en el intervalo `[max/2, max]`.
+   - Implementación de un generador pseudoaleatorio *SplitMix64* nativo con semilla atómica `AtomicU64`, garantizando seguridad multi-hilo (*thread-safe*) sin introducir dependencias de crates de números aleatorios pesados.
+   - Actualización y ampliación de las pruebas unitarias de `calculate_backoff`.
+
+4. **Verificación y Control de Calidad:**
+   - Formateo de código con `cargo fmt --check` sin discrepancias.
+   - Análisis estático con `cargo clippy --all-targets --all-features -- -D warnings` aprobado con cero advertencias.
+   - Batería de 55 pruebas automatizadas (47 unitarias + 4 de integración + 4 de wiremock) aprobadas al 100%.
+   - Actualización de `CHANGELOG.md` (sección `[Unreleased]`), `docs/MANUAL_TECNICO.md` y de la presente bitácora.
+
