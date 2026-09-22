@@ -592,5 +592,37 @@ Se incorporó la especificación técnica completa del plan de refactorizaciones
 2. **Control de Versiones:**
    - Se confirmó el cambio en Git mediante el commit `docs: add plan_refactorizaciones.md technical specification to docs`.
 
+---
+
+## Interacción #20
+
+### Solicitud del Usuario
+```text
+Documenta profundamente la implementacion de los nuevas features recomendadas. No implementes nada hasta recibir la aprobacion del plan. Guarda el documento planeado en @[docs]
+```
+
+### Respuesta del Agente
+Se redactó una especificación arquitectónica técnica exhaustiva y profunda de las 5 nuevas funcionalidades recomendadas, persistiendo el documento en [`docs/plan_nuevas_funcionalidades.md`]:
+
+1. **F1: Inicialización desde Variables de Entorno (`UspsClient::from_env`):**
+   - Soporte para principios Twelve-Factor App en entornos Docker/Kubernetes.
+   - Carga y validación automática de `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET`, `USPS_ENVIRONMENT`, `USPS_TIMEOUT_SECS` y `USPS_MAX_RETRIES`.
+
+2. **F2: Decodificación y Persistencia en Disco (`decode_image_bytes` y `save_to_file`):**
+   - Métodos utilitarios en `CreateLabelResponse` y `CreateManifestResponse` para decodificar automáticamente strings Base64 a bytes crudos (PDF/PNG) y guardarlos en disco asíncronamente con `tokio::fs`.
+
+3. **F3: Validador Criptográfico de Firmas de Webhooks (`WebhooksService::verify_signature`):**
+   - Verificación de integridad y origen de notificaciones push de USPS mediante HMAC-SHA256 con comparación en tiempo constante, encapsulado bajo la feature flag opcional `webhook-verification`.
+
+4. **F4: Rastreo Masivo Particionado y Concurrente (`TrackingService::track_all`):**
+   - Superación automática del límite estricto de 35 envíos de USPS fragmentando en bloques de 35, despachando concurrentemente y agregando resultados ordenados en un único vector.
+
+5. **F5: Catálogo Tipado de Códigos de Error Oficiales de USPS (`UspsErrorCode`):**
+   - Modelado tipado de códigos frecuentes de error (`AddressNotFound`, `InvalidZipCode`, `RateLimitExceeded`, etc.) y métodos asistentes ergonómicos en `UspsError`.
+
+6. **Compromiso de No-Implementación:**
+   - Ninguna línea de código de producción fue modificada. Toda la implementación permanece suspendida a la espera de la aprobación explícita del usuario.
+
+
 
 
