@@ -545,3 +545,32 @@ Se llevó a cabo un análisis integral de arquitectura de la base de código tra
    - Batería de 55 pruebas automatizadas (47 unitarias + 4 de integración + 4 de wiremock) aprobadas al 100%.
    - Actualización de `CHANGELOG.md` (sección `[Unreleased]`), `docs/MANUAL_TECNICO.md` y de la presente bitácora.
 
+---
+
+## Interacción #18
+
+### Solicitud del Usuario
+```text
+Prepara toda la documentacion para subir el proyecto a github y a crates.io
+```
+
+### Respuesta del Agente
+Se preparó meticulosamente todo el paquete de lanzamiento, documentación y validación técnica para la versión `0.2.1` del crate `usps_v3_api`:
+
+1. **Incremento de Versión Semántica (`0.2.1`):**
+   - Actualizado `version = "0.2.1"` en [`Cargo.toml`].
+   - Sincronizado [`Cargo.lock`].
+   - Actualizado el bloque de instalación en [`README.md`] a `"0.2.1"`.
+   - Formalizada la sección `## [0.2.1] - 2026-09-22` en [`CHANGELOG.md`].
+   - Añadida la sección de la versión `0.2.1` en [`docs/MANUAL_TECNICO.md`].
+
+2. **Verificaciones de Empaquetado y Documentación:**
+   - Verificación de documentación sin advertencias: `cargo doc --all-features --no-deps`.
+   - Simulación y empaquetado para registro: `cargo package` y `cargo publish --dry-run` completados exitosamente.
+   - Verificación de formateo `cargo fmt --check` y linters `cargo clippy --all-targets --all-features -- -D warnings` con 0 errores.
+   - Todas las 55 pruebas automatizadas pasando al 100%.
+
+3. **Guía de Publicación:**
+   - Detalle de instrucciones precisas para confirmación en Git, creación del tag anotado `v0.2.1`, push a GitHub y publicación en `crates.io`.
+
+

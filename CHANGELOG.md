@@ -5,7 +5,7 @@ Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-09-22
 
 ### Cambiado
 - **Cliente HTTP Centralizado (R1):** Unificación del bucle de despacho HTTP, manejo de token OAuth2, timeout e inyección de reintentos en el método privado `execute_with_retry` (`src/core/client.rs`), reduciendo ~95 líneas de código duplicado en `get_with_query`, `post_json` y `delete`.

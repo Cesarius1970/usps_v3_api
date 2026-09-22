@@ -366,3 +366,14 @@ Cada vez que se extienda el SDK:
   - **Documentación y Changelog:** Archivo `CHANGELOG.md` estandarizado, insignias en `README.md` y manual técnico vivo sincronizado.
   - **Pipeline CI/CD:** Flujo de trabajo en `.github/workflows/ci.yml`.
   - Cobertura expandida a **55 pruebas automáticas y 1 doctest** con 100% de aprobación y 0 advertencias de Clippy.
+
+### Versión 0.2.1 (Refactorización HTTP DRY, Modularización de Precios/Etiquetas y Algoritmo SplitMix64 Jitter)
+- **Fecha:** 2026-09-22
+- **Git Tag:** `v0.2.1`
+- **Registro en crates.io:** `usps_v3_api = "0.2.1"`
+- **Novedades de la Versión:**
+  - **Unificación Nuclear de Despacho HTTP (R1):** Implementación del método centralizado `execute_with_retry` en `UspsClient` (`src/core/client.rs`), consolidando el bucle de reintentos, validación de token y manejo unificado de errores.
+  - **Modularización Estructural de Servicios (R2):** Desacoplamiento de `prices` y `labels` en submódulos dedicados `mod.rs` y `types.rs`, manteniendo intacta la API pública y el 100% de compatibilidad binaria.
+  - **Algoritmo SplitMix64 Decorrelated Equal Jitter (R3):** Sustitución del multiplicador estático por fluctuación *Equal Jitter* en `[max/2, max]` mediante generador pseudoaleatorio *SplitMix64* thread-safe nativo con `AtomicU64` (`src/core/retry.rs`).
+  - **Calidad y Estabilidad:** 100% de retrocompatibilidad, 0 advertencias de compilación y Clippy, y 55 pruebas automatizadas pasando exitosamente.
+
